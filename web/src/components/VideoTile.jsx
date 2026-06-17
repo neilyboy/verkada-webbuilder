@@ -33,17 +33,41 @@ export default function VideoTile({ src, label, showLabel = true, muted = true, 
         fragLoadingTimeOut: 20000,
       });
       hlsRef.current = hls;
+      let netRetries = 0;
+      let mediaRetries = 0;
       hls.loadSource(src);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (!data.fatal) return;
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-          hls.startLoad();
+          // A 4xx/5xx on the manifest means the stream really isn't available
+          // (e.g. wrong org_id). Don't retry forever — give up after a few tries.
+          const isManifest =
+            data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR ||
+            data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT ||
+            data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR;
+          if (netRetries++ >= 3) {
+            setStatus('error');
+            hls.destroy();
+            return;
+          }
+          if (isManifest && netRetries >= 2) {
+            setStatus('error');
+            hls.destroy();
+            return;
+          }
+          setTimeout(() => !cancelled && hls.startLoad(), 1500);
         } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          if (mediaRetries++ >= 2) {
+            setStatus('error');
+            hls.destroy();
+            return;
+          }
           hls.recoverMediaError();
         } else {
           setStatus('error');
+          hls.destroy();
         }
       });
     } else {

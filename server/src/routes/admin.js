@@ -19,6 +19,7 @@ import {
   listCameras,
   clearStreamingToken,
   clearApiToken,
+  testStream,
 } from '../verkada.js';
 import { registerAllowedHost } from '../hlsProxy.js';
 import { servePlaylist, serveCloudSegment, serveLocalSegment } from '../streamCore.js';
@@ -107,7 +108,13 @@ router.delete('/settings/api-key', requireAdmin, (req, res) => {
 router.post('/test', requireAdmin, async (req, res) => {
   try {
     const cams = await listCameras();
-    res.json({ ok: true, count: cams.length });
+    let stream;
+    try {
+      stream = await testStream();
+    } catch (e) {
+      stream = { ok: false, message: e.message };
+    }
+    res.json({ ok: true, count: cams.length, stream });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }

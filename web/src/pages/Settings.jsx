@@ -43,7 +43,7 @@ export default function Settings({ onChange }) {
     setTestResult({ loading: true });
     try {
       const r = await api.post('/api/admin/test');
-      setTestResult({ ok: true, count: r.count });
+      setTestResult({ ok: true, count: r.count, stream: r.stream });
     } catch (e) {
       setTestResult({ ok: false, error: e.message });
     }
@@ -74,11 +74,15 @@ export default function Settings({ onChange }) {
 
         <label className="label">Organization ID</label>
         <input
-          className="input mb-3"
+          className="input mb-1"
           placeholder="org_id (required for streaming)"
           value={orgId}
           onChange={(e) => setOrgId(e.target.value)}
         />
+        <p className="mb-3 text-xs text-gray-500">
+          Find this in Verkada Command → <b>All Products → Admin → Org Settings → Verkada API</b>.
+          It is the <b>Organization ID</b> value (not your organization's name).
+        </p>
 
         <label className="label">API Base URL (region)</label>
         <input
@@ -108,6 +112,30 @@ export default function Settings({ onChange }) {
           )}
           {msg && <span className="text-sm text-gray-400">{msg}</span>}
         </div>
+
+        {testResult?.ok && testResult.stream && (
+          <div className="mt-3 text-sm">
+            {testResult.stream.ok ? (
+              <div className="flex items-center gap-1 text-green-400">
+                <CheckCircle2 className="h-4 w-4" /> Live streaming works
+                {testResult.stream.camera ? ` (tested “${testResult.stream.camera}”)` : ''}
+              </div>
+            ) : (
+              <div className="rounded-lg bg-amber-500/10 p-3 text-amber-300">
+                <div className="flex items-center gap-1 font-medium">
+                  <XCircle className="h-4 w-4" /> Streaming failed
+                  {testResult.stream.status ? ` (HTTP ${testResult.stream.status})` : ''}
+                </div>
+                {testResult.stream.message && (
+                  <div className="mt-1 text-xs opacity-90">{testResult.stream.message}</div>
+                )}
+                {testResult.stream.hint && (
+                  <div className="mt-1 text-xs">{testResult.stream.hint}</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <ChangePassword />

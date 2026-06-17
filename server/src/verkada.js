@@ -133,6 +133,40 @@ export function clearStreamingToken() {
   jwtCache = { token: null, expiresAt: 0 };
 }
 
+// End-to-end streaming self-test: lists cameras, gets a JWT, and tries to fetch
+// a live playlist for one camera. Surfaces a clear hint when the org_id is wrong.
+export async function testStream() {
+  const cams = await listCameras();
+  const cam = cams.find((c) => c.status === 'Live') || cams[0];
+  if (!cam) return { ok: false, message: 'No cameras available to test.' };
+  if (!getOrgId()) {
+    return {
+      ok: false,
+      message: 'Organization ID is not set.',
+      hint: 'Copy it from Verkada Command → All Products → Admin → Org Settings → Verkada API.',
+    };
+  }
+  const jwt = await getStreamingToken();
+  const url = buildStreamUrl({ cameraId: cam.camera_id, jwt, resolution: 'low_res' });
+  const res = await fetch(url, { headers: { accept: '*/*' } });
+  if (res.ok) return { ok: true, camera: cam.name };
+  let message = res.statusText;
+  try {
+    message = JSON.parse(await res.text()).message || message;
+  } catch {
+    /* ignore */
+  }
+  const orgIssue = res.status === 404 || /org_id|not found/i.test(message);
+  return {
+    ok: false,
+    status: res.status,
+    message,
+    hint: orgIssue
+      ? 'This usually means the Organization ID is incorrect. Copy the exact value from Verkada Command → All Products → Admin → Org Settings → Verkada API (it is not your org name).'
+      : null,
+  };
+}
+
 // Build the cloud HLS master playlist URL for a camera.
 export function buildStreamUrl({ cameraId, jwt, resolution = 'low_res' }) {
   const orgId = getOrgId();
