@@ -133,12 +133,44 @@ export function clearStreamingToken() {
   jwtCache = { token: null, expiresAt: 0 };
 }
 
-// End-to-end streaming self-test: lists cameras, gets a JWT, and tries to fetch
-// a live playlist for one camera. Surfaces a clear hint when the org_id is wrong.
+// Returns the set of camera_ids the current API key is permitted to stream,
+// based on the accessibleCameras / accessibleSites in the streaming token.
+export async function getStreamableScope() {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('Verkada API key is not configured');
+  const body = await rawFetch('GET', '/cameras/v1/footage/token', {
+    query: { exclude_accessible_resources: false },
+    headers: { 'x-api-key': apiKey },
+  });
+  const sites = new Set(body.accessibleSites || []);
+  const cameras = new Set(
+    (body.accessibleCameras || []).map((c) =>
+      typeof c === 'string' ? c : c.camera_id || c.cameraId || c.id
+    )
+  );
+  return { jwt: body.jwt || body.token, sites, cameras, permission: body.permission || [] };
+}
+
+// True if a camera is within the API key's streaming scope.
+function isStreamable(cam, scope) {
+  return scope.cameras.has(cam.camera_id) || scope.sites.has(cam.site_id);
+}
+
+export async function listStreamableCameraIds() {
+  try {
+    const [cams, scope] = await Promise.all([listCameras(), getStreamableScope()]);
+    return cams.filter((c) => isStreamable(c, scope)).map((c) => c.camera_id);
+  } catch {
+    return [];
+  }
+}
+
+// End-to-end streaming self-test: lists cameras, checks the key's streaming
+// scope, and tries to fetch a live playlist for an in-scope camera. Surfaces a
+// precise hint when the org_id is wrong or the key lacks streaming permission.
 export async function testStream() {
   const cams = await listCameras();
-  const cam = cams.find((c) => c.status === 'Live') || cams[0];
-  if (!cam) return { ok: false, message: 'No cameras available to test.' };
+  if (!cams.length) return { ok: false, message: 'No cameras available to test.' };
   if (!getOrgId()) {
     return {
       ok: false,
@@ -146,25 +178,39 @@ export async function testStream() {
       hint: 'Copy it from Verkada Command → All Products → Admin → Org Settings → Verkada API.',
     };
   }
-  const jwt = await getStreamingToken();
-  const url = buildStreamUrl({ cameraId: cam.camera_id, jwt, resolution: 'low_res' });
+
+  const scope = await getStreamableScope();
+  const streamable = cams.filter((c) => isStreamable(c, scope));
+
+  if (!streamable.length) {
+    return {
+      ok: false,
+      message: `Your API key has streaming access to ${scope.cameras.size} camera(s) / ${scope.sites.size} site(s), but none of them match your ${cams.length} cameras.`,
+      hint:
+        'Re-generate the API key in Verkada Command → All Products → Admin → API & Integration → API Keys. Enable the "Streaming — Live/Historical" endpoint, and under Streaming select the sites/cameras you want to view (or "All sites"). Then paste the new key here.',
+    };
+  }
+
+  const cam = streamable.find((c) => c.status === 'Live') || streamable[0];
+  const url = buildStreamUrl({ cameraId: cam.camera_id, jwt: scope.jwt, resolution: 'low_res' });
   const res = await fetch(url, { headers: { accept: '*/*' } });
-  if (res.ok) return { ok: true, camera: cam.name };
+  if (res.ok) return { ok: true, camera: cam.name, streamable: streamable.length, total: cams.length };
+
   let message = res.statusText;
   try {
     message = JSON.parse(await res.text()).message || message;
   } catch {
     /* ignore */
   }
-  const orgIssue = res.status === 404 || /org_id|not found/i.test(message);
-  return {
-    ok: false,
-    status: res.status,
-    message,
-    hint: orgIssue
-      ? 'This usually means the Organization ID is incorrect. Copy the exact value from Verkada Command → All Products → Admin → Org Settings → Verkada API (it is not your org name).'
-      : null,
-  };
+  let hint = null;
+  if (res.status === 404 || /org_id/i.test(message)) {
+    hint =
+      'The Organization ID may be incorrect. Copy the exact value from Verkada Command → Admin → Org Settings → Verkada API.';
+  } else if (res.status === 403) {
+    hint =
+      'The API key lacks streaming permission for this camera. Re-generate it with the "Streaming — Live/Historical" endpoint enabled for the relevant sites/cameras.';
+  }
+  return { ok: false, status: res.status, message, hint };
 }
 
 // Build the cloud HLS master playlist URL for a camera.

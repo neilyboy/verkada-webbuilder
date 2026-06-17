@@ -20,6 +20,7 @@ import {
   clearStreamingToken,
   clearApiToken,
   testStream,
+  listStreamableCameraIds,
 } from '../verkada.js';
 import { registerAllowedHost } from '../hlsProxy.js';
 import { servePlaylist, serveCloudSegment, serveLocalSegment } from '../streamCore.js';
@@ -165,7 +166,17 @@ router.get('/cameras', requireAdmin, async (req, res) => {
     }
   }
   const rows = db.prepare('SELECT * FROM cameras ORDER BY name').all();
-  res.json({ cameras: rows.map(rowToCamera) });
+  const cameras = rows.map(rowToCamera);
+  // Annotate which cameras the API key is actually allowed to stream.
+  let streamable = null;
+  if (hasApiKey()) {
+    const ids = new Set(await listStreamableCameraIds());
+    if (ids.size) {
+      streamable = ids.size;
+      for (const c of cameras) c.streamable = ids.has(c.camera_id);
+    }
+  }
+  res.json({ cameras, streamableCount: streamable });
 });
 
 router.post('/cameras/:id/local', requireAdmin, (req, res) => {

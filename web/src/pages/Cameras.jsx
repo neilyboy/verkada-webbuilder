@@ -5,6 +5,7 @@ import { RefreshCw, Loader2, Settings2, X, Wifi } from 'lucide-react';
 
 export default function Cameras() {
   const [cameras, setCameras] = useState([]);
+  const [streamableCount, setStreamableCount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -17,7 +18,10 @@ export default function Cameras() {
     setError('');
     api
       .get(`/api/admin/cameras${refresh ? '?refresh=1' : ''}`)
-      .then((d) => setCameras(d.cameras))
+      .then((d) => {
+        setCameras(d.cameras);
+        setStreamableCount(d.streamableCount);
+      })
       .catch((e) => setError(e.message))
       .finally(() => {
         setLoading(false);
@@ -43,6 +47,20 @@ export default function Cameras() {
 
       {error && <div className="mb-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
 
+      {streamableCount === 0 && cameras.length > 0 && (
+        <div className="mb-4 rounded-lg bg-amber-500/10 p-3 text-sm text-amber-300">
+          <b>None of your cameras are streamable with the current API key.</b> Re-generate the key in
+          Verkada Command → Admin → API & Integration → API Keys with the <b>Streaming —
+          Live/Historical</b> endpoint enabled for the sites/cameras you want, then update it in Settings.
+        </div>
+      )}
+      {streamableCount > 0 && streamableCount < cameras.length && (
+        <div className="mb-4 rounded-lg bg-amber-500/10 p-3 text-sm text-amber-300">
+          {streamableCount} of {cameras.length} cameras are streamable with this API key. Cameras
+          marked <b>no stream</b> are outside the key's streaming scope.
+        </div>
+      )}
+
       {loading ? (
         <div className="text-gray-500">Loading…</div>
       ) : cameras.length === 0 ? (
@@ -60,14 +78,24 @@ export default function Cameras() {
                     {c.site || c.model || c.camera_id}
                   </div>
                 </div>
-                {c.has_rtsp && (
-                  <span
-                    className="flex items-center gap-1 rounded bg-green-500/15 px-1.5 py-0.5 text-[10px] text-green-300"
-                    title="Local RTSP configured"
-                  >
-                    <Wifi className="h-3 w-3" /> local
-                  </span>
-                )}
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  {c.has_rtsp && (
+                    <span
+                      className="flex items-center gap-1 rounded bg-green-500/15 px-1.5 py-0.5 text-[10px] text-green-300"
+                      title="Local RTSP configured"
+                    >
+                      <Wifi className="h-3 w-3" /> local
+                    </span>
+                  )}
+                  {c.streamable === false && (
+                    <span
+                      className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300"
+                      title="Outside this API key's streaming scope"
+                    >
+                      no stream
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="mt-3 flex gap-2">
                 <button className="btn-ghost flex-1" onClick={() => setPreview(c)}>
