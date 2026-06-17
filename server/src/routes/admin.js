@@ -21,6 +21,7 @@ import {
   clearApiToken,
   testStream,
   listStreamableCameraIds,
+  clearStreamableCache,
 } from '../verkada.js';
 import { registerAllowedHost } from '../hlsProxy.js';
 import { servePlaylist, serveCloudSegment, serveLocalSegment } from '../streamCore.js';
@@ -89,6 +90,7 @@ router.post('/settings', requireAdmin, (req, res) => {
     setApiKey(apiKey.trim());
     clearStreamingToken();
     clearApiToken();
+    clearStreamableCache();
   }
   if (typeof orgId === 'string') setSetting('verkada_org_id', orgId.trim());
   if (typeof baseUrl === 'string' && baseUrl.trim()) {
@@ -102,6 +104,7 @@ router.delete('/settings/api-key', requireAdmin, (req, res) => {
   db.prepare("DELETE FROM settings WHERE key = 'verkada_api_key'").run();
   clearStreamingToken();
   clearApiToken();
+  clearStreamableCache();
   res.json({ ok: true });
 });
 
