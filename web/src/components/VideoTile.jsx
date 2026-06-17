@@ -1,0 +1,102 @@
+import React, { useEffect, useRef, useState } from 'react';
+import Hls from 'hls.js';
+import { Video, VideoOff, Loader2 } from 'lucide-react';
+
+// A single HLS video tile. Plays the provided .m3u8 src, with automatic error
+// recovery and a status overlay. `src` may be null (empty slot).
+export default function VideoTile({ src, label, showLabel = true, muted = true, fit = 'cover' }) {
+  const videoRef = useRef(null);
+  const hlsRef = useRef(null);
+  const [status, setStatus] = useState('idle'); // idle | loading | playing | error
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !src) {
+      setStatus('idle');
+      return;
+    }
+    setStatus('loading');
+    let cancelled = false;
+
+    const onPlaying = () => !cancelled && setStatus('playing');
+    video.addEventListener('playing', onPlaying);
+
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native HLS (Safari / iOS).
+      video.src = src;
+      video.play().catch(() => {});
+    } else if (Hls.isSupported()) {
+      const hls = new Hls({
+        lowLatencyMode: true,
+        liveSyncDurationCount: 3,
+        manifestLoadingTimeOut: 15000,
+        fragLoadingTimeOut: 20000,
+      });
+      hlsRef.current = hls;
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        if (!data.fatal) return;
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          hls.startLoad();
+        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+        } else {
+          setStatus('error');
+        }
+      });
+    } else {
+      setStatus('error');
+    }
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener('playing', onPlaying);
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+      video.removeAttribute('src');
+      video.load();
+    };
+  }, [src]);
+
+  return (
+    <div className="relative h-full w-full overflow-hidden rounded-lg bg-black">
+      {src ? (
+        <video
+          ref={videoRef}
+          muted={muted}
+          playsInline
+          autoPlay
+          className="h-full w-full"
+          style={{ objectFit: fit }}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-gray-600">
+          <Video className="h-8 w-8" />
+        </div>
+      )}
+
+      {src && status !== 'playing' && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-gray-300">
+          {status === 'error' ? (
+            <div className="flex flex-col items-center gap-1 text-red-400">
+              <VideoOff className="h-7 w-7" />
+              <span className="text-xs">Stream unavailable</span>
+            </div>
+          ) : (
+            <Loader2 className="h-7 w-7 animate-spin" />
+          )}
+        </div>
+      )}
+
+      {showLabel && label && (
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-1.5 text-sm font-medium text-white">
+          {label}
+        </div>
+      )}
+    </div>
+  );
+}

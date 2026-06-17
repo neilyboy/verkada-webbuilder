@@ -1,0 +1,21 @@
+services:
+  app:
+    build: .
+    container_name: verkada-viewer
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      # Strong secret used to encrypt the stored Verkada API key (REQUIRED).
+      - MASTER_KEY=${MASTER_KEY:?set MASTER_KEY in .env}
+      # Optional: seed the admin password on first boot.
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      # Set to 1 if running behind an HTTPS reverse proxy (nginx/Caddy/Traefik).
+      - TRUST_PROXY=${TRUST_PROXY:-0}
+      # Optional: override Verkada region base URL.
+      - VERKADA_BASE_URL=${VERKADA_BASE_URL:-https://api.verkada.com}
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    # If LOCAL RTSP streaming cannot reach your cameras' LAN with the default
+    # bridge network, uncomment the next line to use the host network instead:
+    # network_mode: host
