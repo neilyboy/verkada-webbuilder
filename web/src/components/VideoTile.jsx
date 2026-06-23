@@ -1,10 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { Video, VideoOff, Loader2 } from 'lucide-react';
+import { Video, VideoOff, Loader2, Maximize2 } from 'lucide-react';
 
 // A single HLS video tile. Plays the provided .m3u8 src, with automatic error
 // recovery and a status overlay. `src` may be null (empty slot).
-export default function VideoTile({ src, label, showLabel = true, muted = true, fit = 'cover' }) {
+export default function VideoTile({
+  src,
+  label,
+  showLabel = true,
+  muted = true,
+  fit = 'cover',
+  onExpand,
+}) {
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const [status, setStatus] = useState('idle'); // idle | loading | playing | error
@@ -87,7 +94,19 @@ export default function VideoTile({ src, label, showLabel = true, muted = true, 
   }, [src]);
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-lg bg-black">
+    <div className="group relative h-full w-full overflow-hidden rounded-lg bg-black">
+      {src && onExpand && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onExpand();
+          }}
+          className="absolute right-2 top-2 z-10 rounded-md bg-black/50 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
+          title="Fullscreen this camera"
+        >
+          <Maximize2 className="h-4 w-4" />
+        </button>
+      )}
       {src ? (
         <video
           ref={videoRef}

@@ -1,7 +1,12 @@
 import express from 'express';
 import crypto from 'node:crypto';
 import db from '../db.js';
-import { servePlaylist, serveCloudSegment, serveLocalSegment } from '../streamCore.js';
+import {
+  servePlaylist,
+  serveCloudSegment,
+  serveLocalSegment,
+  serveTranscodeSegment,
+} from '../streamCore.js';
 
 const router = express.Router();
 
@@ -67,8 +72,10 @@ router.get('/pages/:slug/cam/:cameraId/index.m3u8', ensureCameraAllowed, async (
     resolution: req.query.res === 'high_res' ? 'high_res' : req._config.resolution || 'low_res',
     mode: req.query.mode || 'auto',
     transcode: req.query.transcode === '1',
+    cloudTranscode: req.query.tx === '1',
     segMount: `${base}/seg`,
     localBase: `${base}/local`,
+    txBase: `${base}/tx`,
   });
 });
 
@@ -83,6 +90,11 @@ router.get('/pages/:slug/cam/:cameraId/seg', (req, res) => {
 // Local (RTSP->HLS) segment files.
 router.get('/pages/:slug/cam/:cameraId/local/:file', (req, res) => {
   serveLocalSegment(req, res, req.params.cameraId, req.query.transcode === '1');
+});
+
+// Transcoded (cloud HEVC->H.264) segment files.
+router.get('/pages/:slug/cam/:cameraId/tx/:file', ensureCameraAllowed, (req, res) => {
+  serveTranscodeSegment(req, res, req.params.cameraId);
 });
 
 export default router;

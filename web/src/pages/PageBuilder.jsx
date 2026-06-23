@@ -102,12 +102,16 @@ export default function PageBuilder() {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const previewUrl = (camId) =>
-    camId
-      ? `/api/admin/preview/${encodeURIComponent(camId)}/index.m3u8?res=${
-          cfg.resolution === 'high_res' ? 'high_res' : 'low_res'
-        }&mode=auto`
-      : null;
+  const quality = cfg.quality || (cfg.resolution === 'high_res' ? 'hd' : 'sd');
+  const previewUrl = (camId) => {
+    if (!camId) return null;
+    const res = quality === 'sd' ? 'low_res' : 'high_res';
+    const tx = quality === 'hd_h264' ? '&tx=1' : '';
+    return `/api/admin/preview/${encodeURIComponent(camId)}/index.m3u8?res=${res}&mode=auto${tx}`;
+  };
+
+  const setQuality = (q) =>
+    update({ quality: q, resolution: q === 'sd' ? 'low_res' : 'high_res' });
 
   if (!page || !cfg || !layout) {
     return (
@@ -194,14 +198,22 @@ export default function PageBuilder() {
           </Section>
 
           <Section title="Quality">
-            <select
-              className="input"
-              value={cfg.resolution || 'low_res'}
-              onChange={(e) => update({ resolution: e.target.value })}
-            >
-              <option value="low_res">Low — saves bandwidth</option>
-              <option value="high_res">High</option>
+            <select className="input" value={quality} onChange={(e) => setQuality(e.target.value)}>
+              <option value="sd">SD — H.264, plays everywhere</option>
+              <option value="hd">HD — native H.265 (Safari only)</option>
+              <option value="hd_h264">HD (transcoded) — H.264, plays everywhere</option>
             </select>
+            {quality === 'hd' && (
+              <p className="mt-1 text-xs text-amber-400/80">
+                Native H.265 won't play in Chrome/Firefox. Use “HD (transcoded)” for broad support.
+              </p>
+            )}
+            {quality === 'hd_h264' && (
+              <p className="mt-1 text-xs text-gray-500">
+                Server transcodes HEVC→H.264 on the fly (needs ffmpeg). CPU-intensive — best for a
+                few simultaneous HD streams.
+              </p>
+            )}
             <label className="mt-2 flex items-center gap-2 text-sm">
               <input
                 type="checkbox"

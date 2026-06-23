@@ -10,6 +10,11 @@ import {
   getSessionDir,
   serveLocalFile,
 } from './rtsp.js';
+import {
+  ensureTranscodeSession,
+  getTranscodeDir,
+  touchTranscode,
+} from './transcode.js';
 
 // Shared streaming helpers used by both admin preview and public viewer routes.
 
@@ -30,9 +35,36 @@ export function resolveMode(cameraRow, requested) {
 // Serve the master playlist for a camera.
 // opts: { cameraId, resolution, mode, segMount, localBase, transcode }
 export async function servePlaylist(req, res, opts) {
-  const { cameraId, resolution = 'low_res', mode = 'auto', segMount, localBase, transcode = false } = opts;
+  const {
+    cameraId,
+    resolution = 'low_res',
+    mode = 'auto',
+    segMount,
+    localBase,
+    txBase,
+    transcode = false,
+    cloudTranscode = false,
+  } = opts;
   const row = getCameraRow(cameraId);
   const chosen = resolveMode(row, mode);
+
+  // Cloud HD HEVC -> H.264 on-the-fly transcode (browser-playable HD).
+  if (chosen === 'cloud' && resolution === 'high_res' && cloudTranscode && ffmpegAvailable()) {
+    try {
+      await ensureTranscodeSession(cameraId);
+      const dir = getTranscodeDir(cameraId);
+      const text = fs.readFileSync(path.join(dir, 'index.m3u8'), 'utf8');
+      const rewritten = text
+        .split(/\r?\n/)
+        .map((line) => (line && !line.startsWith('#') ? `${txBase}/${line.trim()}` : line))
+        .join('\n');
+      res.set('Cache-Control', 'no-store');
+      return res.type('application/vnd.apple.mpegurl').send(rewritten);
+    } catch (err) {
+      console.error('[stream] cloud transcode failed, falling back to native:', err.message);
+      // fall through to native cloud HLS
+    }
+  }
 
   if (chosen === 'local') {
     try {
@@ -68,5 +100,12 @@ export function serveCloudSegment(req, res, segMount) {
 export function serveLocalSegment(req, res, cameraId, transcode = false) {
   const dir = getSessionDir(cameraId, transcode);
   if (!dir) return res.status(404).end();
+  return serveLocalFile(dir, req.params.file, res);
+}
+
+export function serveTranscodeSegment(req, res, cameraId) {
+  const dir = getTranscodeDir(cameraId);
+  if (!dir) return res.status(404).end();
+  touchTranscode(cameraId);
   return serveLocalFile(dir, req.params.file, res);
 }

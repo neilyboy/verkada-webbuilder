@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import adminRouter from './routes/admin.js';
 import publicRouter from './routes/public.js';
+import internalRouter from './routes/internal.js';
 import { seedAdminFromEnv } from './auth.js';
 import { getBaseUrl } from './verkada.js';
 import { registerAllowedHost } from './hlsProxy.js';
@@ -33,6 +34,7 @@ app.get('/api/health', (req, res) =>
 
 app.use('/api/admin', adminRouter);
 app.use('/api/public', publicRouter);
+app.use('/api/internal', internalRouter);
 
 // ---- serve built frontend ---------------------------------------------------
 const webDist = path.join(__dirname, '..', '..', 'web', 'dist');

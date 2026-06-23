@@ -43,6 +43,25 @@ function verifySignedUrl(token) {
   }
 }
 
+// Sign a server-internal reference to a (cameraId, resolution) pair. Used to
+// authorize the internal transcode-feed route so it cannot be abused externally
+// (the token is never exposed to browsers — only ffmpeg, server-side).
+export function signInternalRef(cameraId, resolution) {
+  const data = `${cameraId}|${resolution}`;
+  return crypto.createHmac('sha256', proxySecret()).update(data).digest('base64url');
+}
+
+export function verifyInternalRef(token, cameraId, resolution) {
+  if (!token) return false;
+  const expected = signInternalRef(cameraId, resolution);
+  if (token.length !== expected.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
+
 // Allow the configured custom Verkada base host (e.g. for EU regions).
 export function registerAllowedHost(baseUrl) {
   try {

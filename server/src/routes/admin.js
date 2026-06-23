@@ -24,7 +24,12 @@ import {
   clearStreamableCache,
 } from '../verkada.js';
 import { registerAllowedHost } from '../hlsProxy.js';
-import { servePlaylist, serveCloudSegment, serveLocalSegment } from '../streamCore.js';
+import {
+  servePlaylist,
+  serveCloudSegment,
+  serveLocalSegment,
+  serveTranscodeSegment,
+} from '../streamCore.js';
 
 const router = express.Router();
 
@@ -316,8 +321,10 @@ router.get('/preview/:cameraId/index.m3u8', requireAdmin, async (req, res) => {
     resolution: req.query.res === 'high_res' ? 'high_res' : 'low_res',
     mode: req.query.mode || 'auto',
     transcode: req.query.transcode === '1',
+    cloudTranscode: req.query.tx === '1',
     segMount: `${base}/seg`,
     localBase: `${base}/local`,
+    txBase: `${base}/tx`,
   });
 });
 
@@ -330,6 +337,10 @@ router.get('/preview/:cameraId/local/:file', requireAdmin, (req, res) => {
   serveLocalSegment(req, res, req.params.cameraId, req.query.transcode === '1');
 });
 
+router.get('/preview/:cameraId/tx/:file', requireAdmin, (req, res) => {
+  serveTranscodeSegment(req, res, req.params.cameraId);
+});
+
 function defaultConfig() {
   return {
     title: 'Live Cameras',
@@ -340,6 +351,7 @@ function defaultConfig() {
     accent: '#2563eb',
     layout: 'grid-2x2',
     resolution: 'low_res',
+    quality: 'sd',
     refreshSeconds: 0,
     slots: [],
   };
