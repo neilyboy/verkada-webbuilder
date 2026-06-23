@@ -102,7 +102,7 @@ export default function PageBuilder() {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const quality = cfg.quality || (cfg.resolution === 'high_res' ? 'hd' : 'sd');
+  const quality = cfg?.quality || (cfg?.resolution === 'high_res' ? 'hd' : 'sd');
   const previewUrl = (camId) => {
     if (!camId) return null;
     const res = quality === 'sd' ? 'low_res' : 'high_res';
