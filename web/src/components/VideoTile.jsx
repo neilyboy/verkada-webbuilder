@@ -87,12 +87,6 @@ export default function VideoTile({
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = src;
         video.play().catch(() => {});
-        if (showStats) {
-          const onLoaded = () => {
-            setStats({ w: video.videoWidth, h: video.videoHeight, level: '?', bitrate: '?', fps: '?' });
-          };
-          video.addEventListener('loadedmetadata', onLoaded);
-        }
       } else if (Hls.isSupported()) {
         const hls = new Hls({
           lowLatencyMode: true,
@@ -107,60 +101,6 @@ export default function VideoTile({
         hls.loadSource(src);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
-        if (showStats) {
-          let lastFrames = 0;
-          let lastTime = performance.now();
-          let frameCount = 0;
-          const v = videoRef.current;
-          // Count frames via requestVideoFrameCallback (Chromium) or getVideoPlaybackQuality
-          const onVFrame = () => {
-            frameCount++;
-            if (v && !cancelled) v.requestVideoFrameCallback?.(onVFrame);
-          };
-          if (v?.requestVideoFrameCallback) v.requestVideoFrameCallback(onVFrame);
-
-          const updateStats = () => {
-            const vv = videoRef.current;
-            if (!vv) return;
-            const now = performance.now();
-            const dt = (now - lastTime) / 1000;
-            let fps = '?';
-            if (dt > 0) {
-              if (frameCount > 0) {
-                fps = Math.round(frameCount / dt);
-                frameCount = 0;
-              } else {
-                const q = vv.getVideoPlaybackQuality?.();
-                if (q && dt > 0) {
-                  fps = Math.round((q.totalVideoFrames - lastFrames) / dt);
-                  lastFrames = q.totalVideoFrames;
-                }
-              }
-            }
-            lastTime = now;
-            // Try multiple sources for bitrate
-            let bitrate = '?';
-            const lvl = hls.currentLevel >= 0 ? hls.levels[hls.currentLevel] : (hls.levels[hls.loadLevel] || null);
-            if (lvl?.bitrate) {
-              bitrate = Math.round(lvl.bitrate / 1000);
-            } else if (hls.stats?.total && hls.stats?.loading) {
-              // Compute from hls.js bandwidth stats
-              const bps = hls.bandwidthEstimate;
-              if (bps > 0) bitrate = Math.round(bps / 1000);
-            } else if (hls.bandwidthEstimate > 0) {
-              bitrate = Math.round(hls.bandwidthEstimate / 1000);
-            }
-            setStats({
-              w: vv.videoWidth,
-              h: vv.videoHeight,
-              bitrate,
-              fps,
-            });
-          };
-          hls.on(Hls.Events.FRAG_LOADED, updateStats);
-          const statsInterval = setInterval(updateStats, 2000);
-          hls._statsInterval = statsInterval;
-        }
         hls.on(Hls.Events.ERROR, (_e, data) => {
           if (!data.fatal) return;
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
@@ -178,7 +118,7 @@ export default function VideoTile({
             }
             hls.recoverMediaError();
           } else {
-            setStatus('error');
+            updateStatus('error');
             hls.destroy();
           }
         });
@@ -208,7 +148,6 @@ export default function VideoTile({
       cancelled = true;
       video.removeEventListener('playing', onPlaying);
       if (hlsRef.current) {
-        if (hlsRef.current._statsInterval) clearInterval(hlsRef.current._statsInterval);
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
@@ -216,6 +155,94 @@ export default function VideoTile({
       video.load();
     };
   }, [src]);
+
+  // Separate stats tracking effect — runs independently of stream init.
+  // This allows toggling stats on/off without restarting the stream.
+  useEffect(() => {
+    if (!showStats || !src || status !== 'playing') {
+      setStats(null);
+      return;
+    }
+
+    let frameCount = 0;
+    let lastFrames = 0;
+    let lastTime = performance.now();
+    let lastBytes = 0;
+    let rafId = null;
+    let intervalId = null;
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Frame counting via requestVideoFrameCallback (Chromium/Edge/Chrome)
+    const onVFrame = () => {
+      frameCount++;
+      rafId = video.requestVideoFrameCallback?.(onVFrame);
+    };
+    if (video.requestVideoFrameCallback) {
+      rafId = video.requestVideoFrameCallback(onVFrame);
+    }
+
+    const tick = () => {
+      const v = videoRef.current;
+      if (!v) return;
+      const now = performance.now();
+      const dt = (now - lastTime) / 1000;
+
+      // FPS: prefer requestVideoFrameCallback count, fall back to getVideoPlaybackQuality
+      let fps = '?';
+      if (dt > 0) {
+        if (frameCount > 0) {
+          fps = Math.round(frameCount / dt);
+          frameCount = 0;
+        } else {
+          const q = v.getVideoPlaybackQuality?.();
+          if (q) {
+            fps = Math.round((q.totalVideoFrames - lastFrames) / dt);
+            lastFrames = q.totalVideoFrames;
+          }
+        }
+      }
+      lastTime = now;
+
+      // Bitrate: try hls.js bandwidth estimate, then level bitrate, then decoded bytes
+      let bitrate = '?';
+      const hls = hlsRef.current;
+      if (hls) {
+        if (hls.bandwidthEstimate > 0) {
+          bitrate = Math.round(hls.bandwidthEstimate / 1000);
+        } else {
+          const lvl = hls.currentLevel >= 0 ? hls.levels[hls.currentLevel] : (hls.levels[hls.loadLevel] || null);
+          if (lvl?.bitrate) bitrate = Math.round(lvl.bitrate / 1000);
+        }
+      }
+      // Fallback: use webkitVideoDecodedByteCount (Chromium) for approximate bitrate
+      if (bitrate === '?' && v.webkitVideoDecodedByteCount != null) {
+        const deltaBytes = v.webkitVideoDecodedByteCount - lastBytes;
+        if (deltaBytes > 0 && dt > 0) {
+          bitrate = Math.round((deltaBytes * 8) / dt / 1000);
+        }
+        lastBytes = v.webkitVideoDecodedByteCount;
+      }
+
+      setStats({
+        w: v.videoWidth,
+        h: v.videoHeight,
+        bitrate,
+        fps,
+      });
+    };
+
+    // Initial tick after a short delay to let buffers fill
+    const startDelay = setTimeout(tick, 1000);
+    intervalId = setInterval(tick, 2000);
+
+    return () => {
+      clearTimeout(startDelay);
+      clearInterval(intervalId);
+      if (rafId && video.cancelVideoFrameCallback) video.cancelVideoFrameCallback(rafId);
+    };
+  }, [showStats, src, status]);
 
   return (
     <div className={`group relative h-full w-full overflow-hidden rounded-lg bg-black${hidden ? " pointer-events-none opacity-0 absolute -z-10" : ""}`}>
