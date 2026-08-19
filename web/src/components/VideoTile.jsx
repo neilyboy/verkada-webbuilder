@@ -276,17 +276,19 @@ export default function VideoTile({
         </div>
       )}
 
-      {/* Timestamp overlay */}
-      {src && showTimestamp && clock && (
-        <div className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-black/50 px-2 py-0.5 font-mono text-xs text-white">
-          {clock}
-        </div>
-      )}
-
-      {/* Stream stats overlay */}
-      {src && showStats && stats && (
-        <div className="pointer-events-none absolute right-2 bottom-10 z-10 rounded bg-black/60 px-2 py-1 font-mono text-[10px] text-green-400">
-          {stats.w}x{stats.h} · {stats.bitrate !== '?' ? `${stats.bitrate}kbps` : '?'} · {stats.fps !== '?' ? `${stats.fps}fps` : '?'} · {hidden ? 'prebuf' : 'live'}
+      {/* Timestamp + stats overlay (bottom-right, stacked) */}
+      {src && (showTimestamp || (showStats && stats)) && (
+        <div className="pointer-events-none absolute right-2 bottom-8 z-10 flex flex-col items-end gap-1">
+          {showTimestamp && clock && (
+            <div className="rounded bg-black/50 px-2 py-0.5 font-mono text-xs text-white">
+              {clock}
+            </div>
+          )}
+          {showStats && stats && (
+            <div className="rounded bg-black/60 px-2 py-1 font-mono text-[10px] text-green-400">
+              {stats.w}x{stats.h} · {stats.bitrate !== '?' ? `${stats.bitrate}kbps` : '?'} · {stats.fps !== '?' ? `${stats.fps}fps` : '?'} · {hidden ? 'prebuf' : 'live'}
+            </div>
+          )}
         </div>
       )}
 
