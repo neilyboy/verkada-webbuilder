@@ -246,33 +246,35 @@ export default function VideoTile({
 
   return (
     <div className={`group relative h-full w-full overflow-hidden rounded-lg bg-black${hidden ? " pointer-events-none opacity-0 absolute -z-10" : ""}`}>
-      {/* Hover toolbar */}
-      {src && !hidden && status === 'playing' && (onExpand || showSnapshot) && (
+      {/* Expand button (top-right, grid view only) */}
+      {src && !hidden && status === 'playing' && onExpand && (
         <div className="absolute right-2 top-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          {showSnapshot && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                takeSnapshot();
-              }}
-              className="rounded-md bg-black/50 p-1.5 text-white hover:bg-black/70"
-              title="Snapshot"
-            >
-              <Camera className="h-4 w-4" />
-            </button>
-          )}
-          {onExpand && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onExpand();
-              }}
-              className="rounded-md bg-black/50 p-1.5 text-white hover:bg-black/70"
-              title="Fullscreen this camera"
-            >
-              <Maximize2 className="h-4 w-4" />
-            </button>
-          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onExpand();
+            }}
+            className="rounded-md bg-black/50 p-1.5 text-white hover:bg-black/70"
+            title="Fullscreen this camera"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Snapshot button (bottom-left, appears when snapshot mode is on) */}
+      {src && !hidden && status === 'playing' && showSnapshot && (
+        <div className="absolute left-2 bottom-8 z-10 opacity-0 transition-opacity group-hover:opacity-100">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              takeSnapshot();
+            }}
+            className="rounded-md bg-black/50 p-1.5 text-white hover:bg-black/70"
+            title="Take snapshot"
+          >
+            <Camera className="h-4 w-4" />
+          </button>
         </div>
       )}
 
