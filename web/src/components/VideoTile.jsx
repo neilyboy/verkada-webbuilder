@@ -37,7 +37,8 @@ export default function VideoTile({
         lowLatencyMode: true,
         liveSyncDurationCount: 1,
         manifestLoadingTimeOut: 20000,
-        manifestLoadingMaxRetry: 3,
+        manifestLoadingMaxRetry: 8,
+        manifestLoadingRetryDelay: 2000,
         fragLoadingTimeOut: 20000,
       });
       hlsRef.current = hls;
@@ -49,23 +50,19 @@ export default function VideoTile({
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (!data.fatal) return;
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-          // A 4xx/5xx on the manifest means the stream really isn't available
-          // (e.g. wrong org_id). Don't retry forever — give up after a few tries.
           const isManifest =
             data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR ||
             data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT ||
             data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR;
-          if (netRetries++ >= 3) {
+          if (netRetries++ >= 10) {
             setStatus('error');
             hls.destroy();
             return;
           }
-          if (isManifest && netRetries >= 2) {
-            setStatus('error');
-            hls.destroy();
-            return;
-          }
-          setTimeout(() => !cancelled && hls.startLoad(), 1500);
+          // For manifest errors (e.g. transcode still starting up), retry
+          // with a short delay. The server returns 503 until ffmpeg is ready.
+          const delay = isManifest ? 2000 : 1500;
+          setTimeout(() => !cancelled && hls.startLoad(), delay);
         } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
           if (mediaRetries++ >= 2) {
             setStatus('error');

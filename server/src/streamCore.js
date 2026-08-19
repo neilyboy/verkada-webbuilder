@@ -12,6 +12,7 @@ import {
 } from './rtsp.js';
 import {
   ensureTranscodeSession,
+  isTranscodeReady,
   getTranscodeDir,
   touchTranscode,
 } from './transcode.js';
@@ -52,8 +53,11 @@ export async function servePlaylist(req, res, opts) {
   // Cloud HD HEVC -> H.264 on-the-fly transcode (browser-playable HD).
   if (chosen === 'cloud' && resolution === 'high_res' && cloudTranscode && ffmpegAvailable()) {
     try {
-      console.log('[stream] cloud transcode request for', cameraId);
-      await ensureTranscodeSession(cameraId);
+      ensureTranscodeSession(cameraId);
+      if (!isTranscodeReady(cameraId)) {
+        res.set('Cache-Control', 'no-store');
+        return res.status(503).type('application/vnd.apple.mpegurl').send('#EXTM3U\n#EXT-X-VERSION:6\n');
+      }
       const dir = getTranscodeDir(cameraId);
       const text = fs.readFileSync(path.join(dir, 'index.m3u8'), 'utf8');
       const rewritten = text

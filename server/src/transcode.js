@@ -122,18 +122,24 @@ async function waitForPlaylist(session, timeoutMs = 25000) {
   return false;
 }
 
-export async function ensureTranscodeSession(cameraId) {
+export function ensureTranscodeSession(cameraId) {
   let session = sessions.get(cameraId);
   if (!session || session.proc.killed) {
     session = startSession(cameraId);
-  } else {
-    console.log('[transcode] reusing existing session for', cameraId);
   }
   session.lastAccess = Date.now();
-  const ready = await waitForPlaylist(session);
-  if (!ready) throw new Error('Transcode did not start (check ffmpeg / stream permissions)');
-  console.log('[transcode] session ready for', cameraId);
-  return { dir: session.dir };
+  return session;
+}
+
+export function isTranscodeReady(cameraId) {
+  const session = sessions.get(cameraId);
+  if (!session) return false;
+  try {
+    if (!fs.existsSync(session.playlist)) return false;
+    const txt = fs.readFileSync(session.playlist, 'utf8');
+    const segNames = [...txt.matchAll(/^(seg_\w+\.ts)$/gm)].map((m) => m[1]);
+    return segNames.filter((n) => fs.existsSync(path.join(session.dir, n))).length >= 2;
+  } catch { return false; }
 }
 
 export function getTranscodeDir(cameraId) {
