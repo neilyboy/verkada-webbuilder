@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import VideoTile from '../components/VideoTile.jsx';
 import LayoutGrid from '../components/LayoutGrid.jsx';
 import { LAYOUT_LIST, getLayout } from '../layouts.js';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   ArrowLeft,
   Save,
@@ -17,6 +18,7 @@ import {
   Plus,
   Trash2,
   Users,
+  QrCode,
 } from 'lucide-react';
 
 export default function PageBuilder() {
@@ -35,6 +37,7 @@ export default function PageBuilder() {
   const [groups, setGroups] = useState([]);
   const [newGroupName, setNewGroupName] = useState('');
   const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
   useEffect(() => {
     api.get(`/api/admin/pages/${id}`).then(({ page }) => {
@@ -359,6 +362,9 @@ export default function PageBuilder() {
               <a className="btn-ghost flex-1" href={shareUrl} target="_blank" rel="noreferrer">
                 <ExternalLink className="h-4 w-4" /> Open
               </a>
+              <button className="btn-ghost" onClick={() => setShowQR(true)} title="Show QR code">
+                <QrCode className="h-4 w-4" />
+              </button>
               {requireToken && (
                 <button className="btn-ghost" onClick={rotateToken} title="Rotate token (invalidates old links)">
                   <RefreshCw className="h-4 w-4" />
@@ -401,6 +407,34 @@ export default function PageBuilder() {
           )}
         </div>
       </div>
+
+      {showQR && page && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setShowQR(false)}
+        >
+          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="font-semibold">QR Code — {name}</div>
+              <button className="rounded p-1 hover:bg-white/10" onClick={() => setShowQR(false)}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex flex-col items-center gap-3">
+              <div className="rounded-lg bg-white p-4">
+                <QRCodeSVG value={shareUrl} size={200} />
+              </div>
+              <div className="w-full truncate rounded-lg bg-black/30 px-3 py-2 text-xs text-gray-400">
+                {shareUrl}
+              </div>
+              <button className="btn-ghost w-full" onClick={copy}>
+                {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+                Copy link
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
-import { Video, VideoOff, Loader2, Maximize2, Camera, Clock } from 'lucide-react';
+import { Video, VideoOff, Loader2, Maximize2, Camera, Clock, Activity } from 'lucide-react';
 
 // A single HLS video tile. Plays the provided .m3u8 src, with automatic error
 // recovery and a status overlay. `src` may be null (empty slot).
@@ -13,12 +13,14 @@ export default function VideoTile({
   onExpand,
   showSnapshot = false,
   showTimestamp = false,
+  showStats = false,
 }) {
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const [status, setStatus] = useState('idle'); // idle | loading | playing | error
   const [clock, setClock] = useState('');
   const [flash, setFlash] = useState(false);
+  const [stats, setStats] = useState(null);
 
   // Live timestamp overlay
   useEffect(() => {
@@ -78,6 +80,12 @@ export default function VideoTile({
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = src;
         video.play().catch(() => {});
+        if (showStats) {
+          const onLoaded = () => {
+            setStats({ w: video.videoWidth, h: video.videoHeight, level: '?', bitrate: '?', fps: '?' });
+          };
+          video.addEventListener('loadedmetadata', onLoaded);
+        }
       } else if (Hls.isSupported()) {
         const hls = new Hls({
           lowLatencyMode: true,
@@ -92,6 +100,21 @@ export default function VideoTile({
         hls.loadSource(src);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+        if (showStats) {
+          hls.on(Hls.Events.FRAG_LOADED, () => {
+            const v = videoRef.current;
+            if (v) {
+              setStats({
+                w: v.videoWidth,
+                h: v.videoHeight,
+                level: hls.currentLevel >= 0 ? hls.levels[hls.currentLevel]?.height : '?',
+                bitrate: hls.currentLevel >= 0 ? Math.round((hls.levels[hls.currentLevel]?.bitrate || 0) / 1000) : '?',
+                fps: Math.round(v.getVideoPlaybackQuality?.()?.totalVideoFrames / Math.max(1, (performance.now() - (hls._t0 || performance.now())) / 1000)) || '?',
+              });
+            }
+          });
+          hls._t0 = performance.now();
+        }
         hls.on(Hls.Events.ERROR, (_e, data) => {
           if (!data.fatal) return;
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
@@ -183,6 +206,13 @@ export default function VideoTile({
       {src && showTimestamp && clock && (
         <div className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-black/50 px-2 py-0.5 font-mono text-xs text-white">
           {clock}
+        </div>
+      )}
+
+      {/* Stream stats overlay */}
+      {src && showStats && stats && (
+        <div className="pointer-events-none absolute right-2 bottom-10 z-10 rounded bg-black/60 px-2 py-1 font-mono text-[10px] text-green-400">
+          {stats.w}x{stats.h} · {stats.bitrate !== '?' ? `${stats.bitrate}kbps` : '?'} · {stats.fps !== '?' ? `${stats.fps}fps` : '?'}
         </div>
       )}
 

@@ -47,6 +47,37 @@ export default function Cameras() {
 
       {error && <div className="mb-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
 
+      {/* Health summary */}
+      {cameras.length > 0 && (
+        <div className="mb-4 flex gap-3">
+          {(() => {
+            const now = Math.floor(Date.now() / 1000);
+            const live = cameras.filter((c) => {
+              const d = typeof c.data === 'string' ? JSON.parse(c.data || '{}') : (c.data || {});
+              return d.status === 'Live' || (d.last_online && now - d.last_online < 300);
+            }).length;
+            const offline = cameras.length - live;
+            return (
+              <>
+                <div className="flex items-center gap-2 rounded-lg bg-green-500/10 px-3 py-2 text-sm">
+                  <span className="h-2 w-2 rounded-full bg-green-400" />
+                  <span className="text-green-300">{live} online</span>
+                </div>
+                {offline > 0 && (
+                  <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm">
+                    <span className="h-2 w-2 rounded-full bg-red-400" />
+                    <span className="text-red-300">{offline} offline</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm text-gray-400">
+                  Total: {cameras.length}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
       {streamableCount === 0 && cameras.length > 0 && (
         <div className="mb-4 rounded-lg bg-amber-500/10 p-3 text-sm text-amber-300">
           <b>None of your cameras are streamable with the current API key.</b> Re-generate the key in
@@ -79,6 +110,22 @@ export default function Cameras() {
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
+                  {(() => {
+                    const d = typeof c.data === 'string' ? JSON.parse(c.data || '{}') : (c.data || {});
+                    const now = Math.floor(Date.now() / 1000);
+                    const isLive = d.status === 'Live' || (d.last_online && now - d.last_online < 300);
+                    return (
+                      <span
+                        className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] ${
+                          isLive ? 'bg-green-500/15 text-green-300' : 'bg-red-500/15 text-red-300'
+                        }`}
+                        title={d.last_online ? `Last seen: ${new Date(d.last_online * 1000).toLocaleString()}` : d.status || 'unknown'}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${isLive ? 'bg-green-400' : 'bg-red-400'}`} />
+                        {isLive ? 'live' : 'offline'}
+                      </span>
+                    );
+                  })()}
                   {c.has_rtsp && (
                     <span
                       className="flex items-center gap-1 rounded bg-green-500/15 px-1.5 py-0.5 text-[10px] text-green-300"

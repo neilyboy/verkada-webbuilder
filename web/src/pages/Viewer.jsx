@@ -13,6 +13,7 @@ import {
   Clock,
   Repeat,
   Pause,
+  Activity,
 } from 'lucide-react';
 
 export default function Viewer() {
@@ -132,6 +133,7 @@ export default function Viewer() {
   // Viewer toggles: snapshot, timestamp, cycle mode
   const [showSnapshot, setShowSnapshot] = useState(false);
   const [showTimestamp, setShowTimestamp] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   const [cycleMode, setCycleMode] = useState(false);
   const [cyclePos, setCyclePos] = useState(0);
 
@@ -195,6 +197,9 @@ export default function Viewer() {
           break;
         case 't':
           setShowTimestamp((v) => !v);
+          break;
+        case 'd':
+          setShowStats((v) => !v);
           break;
         case 'c':
           if (pageCameras.length > 1) {
@@ -309,6 +314,15 @@ export default function Viewer() {
             >
               <Clock className="h-5 w-5" />
             </button>
+            <button
+              onClick={() => setShowStats((v) => !v)}
+              className={`rounded-md p-2 transition-colors ${
+                showStats ? 'bg-blue-600/30 text-blue-400' : 'hover:bg-white/10'
+              }`}
+              title="Stream stats (D)"
+            >
+              <Activity className="h-5 w-5" />
+            </button>
             {pageCameras.length > 1 && (
               <button
                 onClick={() => {
@@ -371,6 +385,7 @@ export default function Viewer() {
                   fit={cfg.fit || 'cover'}
                   showSnapshot={showSnapshot}
                   showTimestamp={showTimestamp}
+                  showStats={showStats}
                   onExpand={hasCam ? () => openSpotlight(slot.cameraId, slot.label || slot.name) : undefined}
                 />
                 {allowRearrange && hasCam && (
@@ -427,6 +442,15 @@ export default function Viewer() {
               <Clock className="h-5 w-5" />
             </button>
             <button
+              onClick={() => setShowStats((v) => !v)}
+              className={`rounded-md p-2 text-white transition-colors ${
+                showStats ? 'bg-blue-600/40' : 'bg-white/10 hover:bg-white/20'
+              }`}
+              title="Stream stats (D)"
+            >
+              <Activity className="h-5 w-5" />
+            </button>
+            <button
               onClick={closeSpotlight}
               className="rounded-md bg-white/10 p-2 text-white hover:bg-white/20"
               title="Close (Esc)"
@@ -475,6 +499,7 @@ export default function Viewer() {
               fit="contain"
               showSnapshot={showSnapshot}
               showTimestamp={showTimestamp}
+              showStats={showStats}
             />
           </div>
         </div>

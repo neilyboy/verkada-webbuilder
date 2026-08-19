@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
-import { Plus, ExternalLink, Copy, Trash2, Check, Loader2 } from 'lucide-react';
+import { Plus, ExternalLink, Copy, Trash2, Check, Loader2, QrCode, X } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 export default function PagesList() {
   const [pages, setPages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [copied, setCopied] = useState('');
+  const [qrPage, setQrPage] = useState(null);
   const navigate = useNavigate();
 
   const load = () =>
@@ -100,12 +102,46 @@ export default function PagesList() {
                 >
                   <ExternalLink className="h-4 w-4" />
                 </a>
+                <button className="btn-ghost" onClick={() => setQrPage(p)} title="QR code">
+                  <QrCode className="h-4 w-4" />
+                </button>
                 <button className="btn-danger" onClick={() => remove(p)} title="Delete">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {qrPage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setQrPage(null)}
+        >
+          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="font-semibold">QR Code — {qrPage.name}</div>
+              <button className="rounded p-1 hover:bg-white/10" onClick={() => setQrPage(null)}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex flex-col items-center gap-3">
+              <div className="rounded-lg bg-white p-4">
+                <QRCodeSVG value={shareUrl(qrPage)} size={200} />
+              </div>
+              <div className="w-full truncate rounded-lg bg-black/30 px-3 py-2 text-xs text-gray-400">
+                {shareUrl(qrPage)}
+              </div>
+              <button className="btn-ghost w-full" onClick={async () => {
+                await navigator.clipboard.writeText(shareUrl(qrPage));
+                setCopied(qrPage.id);
+                setTimeout(() => setCopied(''), 1500);
+              }}>
+                {copied === qrPage.id ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+                Copy link
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
