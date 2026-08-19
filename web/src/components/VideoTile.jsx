@@ -110,29 +110,55 @@ export default function VideoTile({
         if (showStats) {
           let lastFrames = 0;
           let lastTime = performance.now();
+          let frameCount = 0;
+          const v = videoRef.current;
+          // Count frames via requestVideoFrameCallback (Chromium) or getVideoPlaybackQuality
+          const onVFrame = () => {
+            frameCount++;
+            if (v && !cancelled) v.requestVideoFrameCallback?.(onVFrame);
+          };
+          if (v?.requestVideoFrameCallback) v.requestVideoFrameCallback(onVFrame);
+
           const updateStats = () => {
-            const v = videoRef.current;
-            if (!v) return;
+            const vv = videoRef.current;
+            if (!vv) return;
             const now = performance.now();
             const dt = (now - lastTime) / 1000;
-            const q = v.getVideoPlaybackQuality?.();
             let fps = '?';
-            if (q && dt > 0) {
-              fps = Math.round((q.totalVideoFrames - lastFrames) / dt);
-              lastFrames = q.totalVideoFrames;
+            if (dt > 0) {
+              if (frameCount > 0) {
+                fps = Math.round(frameCount / dt);
+                frameCount = 0;
+              } else {
+                const q = vv.getVideoPlaybackQuality?.();
+                if (q && dt > 0) {
+                  fps = Math.round((q.totalVideoFrames - lastFrames) / dt);
+                  lastFrames = q.totalVideoFrames;
+                }
+              }
             }
             lastTime = now;
-            const level = hls.currentLevel >= 0 ? hls.levels[hls.currentLevel] : hls.levels[hls.loadLevel] || null;
+            // Try multiple sources for bitrate
+            let bitrate = '?';
+            const lvl = hls.currentLevel >= 0 ? hls.levels[hls.currentLevel] : (hls.levels[hls.loadLevel] || null);
+            if (lvl?.bitrate) {
+              bitrate = Math.round(lvl.bitrate / 1000);
+            } else if (hls.stats?.total && hls.stats?.loading) {
+              // Compute from hls.js bandwidth stats
+              const bps = hls.bandwidthEstimate;
+              if (bps > 0) bitrate = Math.round(bps / 1000);
+            } else if (hls.bandwidthEstimate > 0) {
+              bitrate = Math.round(hls.bandwidthEstimate / 1000);
+            }
             setStats({
-              w: v.videoWidth,
-              h: v.videoHeight,
-              bitrate: level ? Math.round((level.bitrate || 0) / 1000) : '?',
+              w: vv.videoWidth,
+              h: vv.videoHeight,
+              bitrate,
               fps,
             });
           };
           hls.on(Hls.Events.FRAG_LOADED, updateStats);
           const statsInterval = setInterval(updateStats, 2000);
-          // Store for cleanup
           hls._statsInterval = statsInterval;
         }
         hls.on(Hls.Events.ERROR, (_e, data) => {

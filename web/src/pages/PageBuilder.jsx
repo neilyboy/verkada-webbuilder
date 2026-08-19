@@ -269,6 +269,19 @@ export default function PageBuilder() {
               />
               Fit whole frame (letterbox)
             </label>
+            <label className="label mt-3">Camera cycle interval (seconds)</label>
+            <input
+              type="number"
+              min="5"
+              max="300"
+              step="5"
+              className="input w-24"
+              value={cfg.cycleInterval || 15}
+              onChange={(e) => update({ cycleInterval: Math.max(5, parseInt(e.target.value, 10) || 15) })}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              How long each camera shows before rotating when cycle mode is enabled in the viewer.
+            </p>
           </Section>
 
           <Section title="Branding">

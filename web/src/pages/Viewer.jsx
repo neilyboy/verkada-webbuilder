@@ -156,7 +156,9 @@ export default function Viewer() {
     setNextReady(v);
   }, []);
 
-  const CYCLE_INTERVAL = 15000; // 15 seconds per camera
+  const CYCLE_INTERVAL = ((page?.config?.cycleInterval) || 15) * 1000;
+  const cycleIntervalRef = useRef(CYCLE_INTERVAL);
+  cycleIntervalRef.current = CYCLE_INTERVAL;
   const advanceCycleRef = useRef(null);
 
   const advanceCycle = useCallback(() => {
@@ -192,7 +194,7 @@ export default function Viewer() {
           }
         }, 500);
       }
-    }, CYCLE_INTERVAL);
+    }, cycleIntervalRef.current);
   }, []);
 
   // Called by spotlight VideoTile when its status changes
