@@ -42,6 +42,7 @@ export async function servePlaylist(req, res, opts) {
     segMount,
     localBase,
     txBase,
+    txQuery = '',
     transcode = false,
     cloudTranscode = false,
   } = opts;
@@ -56,7 +57,14 @@ export async function servePlaylist(req, res, opts) {
       const text = fs.readFileSync(path.join(dir, 'index.m3u8'), 'utf8');
       const rewritten = text
         .split(/\r?\n/)
-        .map((line) => (line && !line.startsWith('#') ? `${txBase}/${line.trim()}` : line))
+        .map((line) => {
+          if (line && !line.startsWith('#')) {
+            let url = `${txBase}/${line.trim()}`;
+            if (txQuery) url += `?${txQuery}`;
+            return url;
+          }
+          return line;
+        })
         .join('\n');
       res.set('Cache-Control', 'no-store');
       return res.type('application/vnd.apple.mpegurl').send(rewritten);

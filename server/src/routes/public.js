@@ -76,6 +76,7 @@ router.get('/pages/:slug/cam/:cameraId/index.m3u8', ensureCameraAllowed, async (
     segMount: `${base}/seg`,
     localBase: `${base}/local`,
     txBase: `${base}/tx`,
+    txQuery: req.query.t ? `t=${encodeURIComponent(req.query.t)}` : '',
   });
 });
 
