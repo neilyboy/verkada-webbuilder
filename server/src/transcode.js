@@ -103,7 +103,13 @@ async function waitForPlaylist(session, timeoutMs = 20000) {
     try {
       if (fs.existsSync(session.playlist)) {
         const txt = fs.readFileSync(session.playlist, 'utf8');
-        if (/\.ts(\?|$)/m.test(txt)) return true; // at least one segment written
+        // Find the first segment filename and verify the file actually exists
+        // on disk — ffmpeg can list a segment in the playlist before it has
+        // finished flushing the file, which would cause a 404 on first fetch.
+        const m = txt.match(/^(seg_\w+\.ts)$/m);
+        if (m && fs.existsSync(path.join(session.dir, m[1]))) {
+          return true;
+        }
       }
     } catch {
       /* ignore */

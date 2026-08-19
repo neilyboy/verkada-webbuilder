@@ -111,9 +111,17 @@ export function serveLocalSegment(req, res, cameraId, transcode = false) {
   return serveLocalFile(dir, req.params.file, res);
 }
 
-export function serveTranscodeSegment(req, res, cameraId) {
+export async function serveTranscodeSegment(req, res, cameraId) {
   const dir = getTranscodeDir(cameraId);
   if (!dir) return res.status(404).end();
   touchTranscode(cameraId);
+  // The segment file might not be flushed to disk yet if ffmpeg just wrote
+  // the playlist. Retry briefly before giving up with a 404.
+  const safe = path.basename(req.params.file);
+  const full = path.join(dir, safe);
+  for (let i = 0; i < 10; i++) {
+    if (fs.existsSync(full)) break;
+    await new Promise((r) => setTimeout(r, 200));
+  }
   return serveLocalFile(dir, req.params.file, res);
 }
