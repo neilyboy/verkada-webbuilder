@@ -26,6 +26,7 @@ function selfBase() {
 }
 
 function startSession(cameraId) {
+  console.log('[transcode] starting session for', cameraId);
   const dir = fs.mkdtempSync(path.join(TX_DIR, 'cam-'));
   const playlist = path.join(dir, 'index.m3u8');
   const k = signInternalRef(cameraId, 'high_res');
@@ -97,17 +98,19 @@ function scheduleIdleCheck(cameraId, session) {
   }, IDLE_MS);
 }
 
-async function waitForPlaylist(session, timeoutMs = 20000) {
+async function waitForPlaylist(session, timeoutMs = 25000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
       if (fs.existsSync(session.playlist)) {
         const txt = fs.readFileSync(session.playlist, 'utf8');
-        // Find the first segment filename and verify the file actually exists
-        // on disk — ffmpeg can list a segment in the playlist before it has
-        // finished flushing the file, which would cause a 404 on first fetch.
-        const m = txt.match(/^(seg_\w+\.ts)$/m);
-        if (m && fs.existsSync(path.join(session.dir, m[1]))) {
+        // Wait for at least 2 segment files to exist on disk. hls.js with
+        // liveSyncDurationCount:3 may spin if the playlist has only 1 segment.
+        const segNames = [...txt.matchAll(/^(seg_\w+\.ts)$/gm)].map((m) => m[1]);
+        const existing = segNames.filter((name) =>
+          fs.existsSync(path.join(session.dir, name))
+        );
+        if (existing.length >= 2) {
           return true;
         }
       }
@@ -123,10 +126,13 @@ export async function ensureTranscodeSession(cameraId) {
   let session = sessions.get(cameraId);
   if (!session || session.proc.killed) {
     session = startSession(cameraId);
+  } else {
+    console.log('[transcode] reusing existing session for', cameraId);
   }
   session.lastAccess = Date.now();
   const ready = await waitForPlaylist(session);
   if (!ready) throw new Error('Transcode did not start (check ffmpeg / stream permissions)');
+  console.log('[transcode] session ready for', cameraId);
   return { dir: session.dir };
 }
 

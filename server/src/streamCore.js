@@ -52,6 +52,7 @@ export async function servePlaylist(req, res, opts) {
   // Cloud HD HEVC -> H.264 on-the-fly transcode (browser-playable HD).
   if (chosen === 'cloud' && resolution === 'high_res' && cloudTranscode && ffmpegAvailable()) {
     try {
+      console.log('[stream] cloud transcode request for', cameraId);
       await ensureTranscodeSession(cameraId);
       const dir = getTranscodeDir(cameraId);
       const text = fs.readFileSync(path.join(dir, 'index.m3u8'), 'utf8');

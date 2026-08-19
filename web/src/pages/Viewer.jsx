@@ -297,6 +297,7 @@ export default function Viewer() {
           </div>
           <div className="min-h-0 flex-1">
             <VideoTile
+              key={`${spotlight.cameraId}-${spotlightQuality}`}
               src={streamUrl(spotlight.cameraId, { res: spotlightRes, transcode: spotlightTx })}
               label={spotlight.name}
               showLabel={false}

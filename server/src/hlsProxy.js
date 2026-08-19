@@ -108,7 +108,13 @@ async function fetchWithJwt(absoluteUrl) {
   const jwt = await getStreamingToken();
   const url = new URL(absoluteUrl);
   url.searchParams.set('jwt', jwt);
-  return fetch(url, { headers: { accept: '*/*' } });
+  try {
+    const r = await fetch(url, { headers: { accept: '*/*' } });
+    return r;
+  } catch (err) {
+    console.error('[hlsProxy] fetch failed for', url.pathname, ':', err.message);
+    throw err;
+  }
 }
 
 // Serve the master playlist for a given Verkada stream URL.

@@ -35,8 +35,9 @@ export default function VideoTile({
     } else if (Hls.isSupported()) {
       const hls = new Hls({
         lowLatencyMode: true,
-        liveSyncDurationCount: 3,
-        manifestLoadingTimeOut: 15000,
+        liveSyncDurationCount: 1,
+        manifestLoadingTimeOut: 20000,
+        manifestLoadingMaxRetry: 3,
         fragLoadingTimeOut: 20000,
       });
       hlsRef.current = hls;
