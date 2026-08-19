@@ -148,6 +148,8 @@ export default function Viewer() {
   const nextReadyRef = useRef(false);
   const cycleTimerRef = useRef(null);
   const swapRef = useRef(null);
+  const cycleModeRef = useRef(false);
+  const spotlightPlayingRef = useRef(false);
 
   const setNextReadyBoth = useCallback((v) => {
     nextReadyRef.current = v;
@@ -155,6 +157,7 @@ export default function Viewer() {
   }, []);
 
   const CYCLE_INTERVAL = 15000; // 15 seconds per camera
+  const advanceCycleRef = useRef(null);
 
   const advanceCycle = useCallback(() => {
     if (!pageCameras.length) return;
@@ -167,27 +170,51 @@ export default function Viewer() {
       return nextIdx;
     });
     setNextReadyBoth(false);
+    spotlightPlayingRef.current = false;
   }, [pageCameras, setNextReadyBoth]);
 
-  // Start cycle timer when current spotlight starts playing
+  // Keep advanceCycleRef current
+  useEffect(() => {
+    advanceCycleRef.current = advanceCycle;
+  }, [advanceCycle]);
+
+  const startCycleTimer = useCallback(() => {
+    if (cycleTimerRef.current) clearTimeout(cycleTimerRef.current);
+    cycleTimerRef.current = setTimeout(() => {
+      if (nextReadyRef.current) {
+        advanceCycleRef.current?.();
+      } else {
+        swapRef.current = setInterval(() => {
+          if (nextReadyRef.current) {
+            clearInterval(swapRef.current);
+            swapRef.current = null;
+            advanceCycleRef.current?.();
+          }
+        }, 500);
+      }
+    }, CYCLE_INTERVAL);
+  }, []);
+
+  // Called by spotlight VideoTile when its status changes
   const onSpotlightStatus = useCallback((s) => {
-    if (s === 'playing' && cycleMode) {
-      if (cycleTimerRef.current) clearTimeout(cycleTimerRef.current);
-      cycleTimerRef.current = setTimeout(() => {
-        if (nextReadyRef.current) {
-          advanceCycle();
-        } else {
-          swapRef.current = setInterval(() => {
-            if (nextReadyRef.current) {
-              clearInterval(swapRef.current);
-              swapRef.current = null;
-              advanceCycle();
-            }
-          }, 500);
-        }
-      }, CYCLE_INTERVAL);
+    spotlightPlayingRef.current = (s === 'playing');
+    if (s === 'playing' && cycleModeRef.current) {
+      startCycleTimer();
     }
-  }, [cycleMode, advanceCycle]);
+  }, [startCycleTimer]);
+
+  // Keep cycleModeRef in sync
+  useEffect(() => {
+    cycleModeRef.current = cycleMode;
+    if (cycleMode && spotlightPlayingRef.current) {
+      // Cycle mode just turned on and spotlight is already playing — start timer now
+      startCycleTimer();
+    } else if (!cycleMode) {
+      // Cycle mode turned off — clear timers
+      if (cycleTimerRef.current) { clearTimeout(cycleTimerRef.current); cycleTimerRef.current = null; }
+      if (swapRef.current) { clearInterval(swapRef.current); swapRef.current = null; }
+    }
+  }, [cycleMode, startCycleTimer]);
 
   // When nextReady becomes true and we have a pending swap check, trigger it
   useEffect(() => {
@@ -203,14 +230,15 @@ export default function Viewer() {
     setNextReadyBoth(false);
   }, [spotlight?.cameraId, setNextReadyBoth]);
 
-  // Cleanup timers when cycle mode or spotlight changes
+  // Cleanup timers when spotlight is closed
   useEffect(() => {
-    if (!cycleMode || !spotlight) {
+    if (!spotlight) {
       if (cycleTimerRef.current) { clearTimeout(cycleTimerRef.current); cycleTimerRef.current = null; }
       if (swapRef.current) { clearInterval(swapRef.current); swapRef.current = null; }
       setNextReadyBoth(false);
+      spotlightPlayingRef.current = false;
     }
-  }, [cycleMode, spotlight, setNextReadyBoth]);
+  }, [spotlight, setNextReadyBoth]);
 
   // Cleanup on unmount
   useEffect(() => {

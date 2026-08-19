@@ -108,19 +108,32 @@ export default function VideoTile({
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
         if (showStats) {
-          hls.on(Hls.Events.FRAG_LOADED, () => {
+          let lastFrames = 0;
+          let lastTime = performance.now();
+          const updateStats = () => {
             const v = videoRef.current;
-            if (v) {
-              setStats({
-                w: v.videoWidth,
-                h: v.videoHeight,
-                level: hls.currentLevel >= 0 ? hls.levels[hls.currentLevel]?.height : '?',
-                bitrate: hls.currentLevel >= 0 ? Math.round((hls.levels[hls.currentLevel]?.bitrate || 0) / 1000) : '?',
-                fps: Math.round(v.getVideoPlaybackQuality?.()?.totalVideoFrames / Math.max(1, (performance.now() - (hls._t0 || performance.now())) / 1000)) || '?',
-              });
+            if (!v) return;
+            const now = performance.now();
+            const dt = (now - lastTime) / 1000;
+            const q = v.getVideoPlaybackQuality?.();
+            let fps = '?';
+            if (q && dt > 0) {
+              fps = Math.round((q.totalVideoFrames - lastFrames) / dt);
+              lastFrames = q.totalVideoFrames;
             }
-          });
-          hls._t0 = performance.now();
+            lastTime = now;
+            const level = hls.currentLevel >= 0 ? hls.levels[hls.currentLevel] : hls.levels[hls.loadLevel] || null;
+            setStats({
+              w: v.videoWidth,
+              h: v.videoHeight,
+              bitrate: level ? Math.round((level.bitrate || 0) / 1000) : '?',
+              fps,
+            });
+          };
+          hls.on(Hls.Events.FRAG_LOADED, updateStats);
+          const statsInterval = setInterval(updateStats, 2000);
+          // Store for cleanup
+          hls._statsInterval = statsInterval;
         }
         hls.on(Hls.Events.ERROR, (_e, data) => {
           if (!data.fatal) return;
@@ -169,6 +182,7 @@ export default function VideoTile({
       cancelled = true;
       video.removeEventListener('playing', onPlaying);
       if (hlsRef.current) {
+        if (hlsRef.current._statsInterval) clearInterval(hlsRef.current._statsInterval);
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
@@ -219,7 +233,7 @@ export default function VideoTile({
       {/* Stream stats overlay */}
       {src && showStats && stats && (
         <div className="pointer-events-none absolute right-2 bottom-10 z-10 rounded bg-black/60 px-2 py-1 font-mono text-[10px] text-green-400">
-          {stats.w}x{stats.h} · {stats.bitrate !== '?' ? `${stats.bitrate}kbps` : '?'} · {stats.fps !== '?' ? `${stats.fps}fps` : '?'}
+          {stats.w}x{stats.h} · {stats.bitrate !== '?' ? `${stats.bitrate}kbps` : '?'} · {stats.fps !== '?' ? `${stats.fps}fps` : '?'} · {hidden ? 'prebuf' : 'live'}
         </div>
       )}
 
