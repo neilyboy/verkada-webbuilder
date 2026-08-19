@@ -106,12 +106,18 @@ export default function Viewer() {
   };
 
   // Fullscreen "spotlight" of a single camera.
+  // Spotlight always defaults to HD transcoded for best quality at full size.
   const [spotlight, setSpotlight] = useState(null);
+  const [spotlightQuality, setSpotlightQuality] = useState('hd_h264');
   const overlayRef = useRef(null);
+
+  const spotlightRes = spotlightQuality === 'sd' ? 'low_res' : 'high_res';
+  const spotlightTx = spotlightQuality === 'hd_h264';
 
   const closeSpotlight = useCallback(() => {
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     setSpotlight(null);
+    setSpotlightQuality('hd_h264');
   }, []);
 
   useEffect(() => {
@@ -162,11 +168,12 @@ export default function Viewer() {
   const res = quality === 'sd' ? 'low_res' : 'high_res';
   const transcode = quality === 'hd_h264';
 
-  const streamUrl = (cameraId) => {
+  const streamUrl = (cameraId, override) => {
+    const o = override || {};
     const q = new URLSearchParams();
     if (token) q.set('t', token);
-    q.set('res', res);
-    if (transcode) q.set('tx', '1');
+    q.set('res', o.res || res);
+    if (o.transcode ?? transcode) q.set('tx', '1');
     return `/api/public/pages/${encodeURIComponent(slug)}/cam/${encodeURIComponent(
       cameraId
     )}/index.m3u8?${q.toString()}`;
@@ -266,8 +273,35 @@ export default function Viewer() {
               {spotlight.name}
             </div>
           )}
+          <div className="absolute left-4 bottom-4 z-10 flex items-center gap-1">
+            {['sd', 'hd', 'hd_h264'].map((q) => (
+              <button
+                key={q}
+                onClick={() => setSpotlightQuality(q)}
+                className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                  spotlightQuality === q
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white/10 text-white/70 hover:bg-white/20'
+                }`}
+                title={
+                  q === 'sd'
+                    ? 'SD — H.264, lowest quality'
+                    : q === 'hd'
+                    ? 'HD — native H.265 (Safari only)'
+                    : 'HD (transcoded) — H.264, best quality for all browsers'
+                }
+              >
+                {q === 'sd' ? 'SD' : q === 'hd' ? 'HD' : 'HD+'}
+              </button>
+            ))}
+          </div>
           <div className="min-h-0 flex-1">
-            <VideoTile src={streamUrl(spotlight.cameraId)} label={spotlight.name} showLabel={false} fit="contain" />
+            <VideoTile
+              src={streamUrl(spotlight.cameraId, { res: spotlightRes, transcode: spotlightTx })}
+              label={spotlight.name}
+              showLabel={false}
+              fit="contain"
+            />
           </div>
         </div>
       )}
