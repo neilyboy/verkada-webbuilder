@@ -568,7 +568,7 @@ export default function Viewer() {
               )}
             </div>
           )}
-          <div className="absolute left-4 bottom-4 z-10 flex items-center gap-1">
+          <div className="absolute left-1/2 bottom-4 z-10 flex -translate-x-1/2 items-center gap-1">
             {['sd', 'hd', 'hd_h264'].map((q) => (
               <button
                 key={q}
