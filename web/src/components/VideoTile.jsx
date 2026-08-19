@@ -14,6 +14,8 @@ export default function VideoTile({
   showSnapshot = false,
   showTimestamp = false,
   showStats = false,
+  onStatusChange,
+  hidden = false,
 }) {
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
@@ -21,6 +23,11 @@ export default function VideoTile({
   const [clock, setClock] = useState('');
   const [flash, setFlash] = useState(false);
   const [stats, setStats] = useState(null);
+
+  const updateStatus = useCallback((s) => {
+    setStatus(s);
+    if (onStatusChange) onStatusChange(s);
+  }, [onStatusChange]);
 
   // Live timestamp overlay
   useEffect(() => {
@@ -62,13 +69,13 @@ export default function VideoTile({
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) {
-      setStatus('idle');
+      updateStatus('idle');
       return;
     }
-    setStatus('loading');
+    updateStatus('loading');
     let cancelled = false;
 
-    const onPlaying = () => !cancelled && setStatus('playing');
+    const onPlaying = () => !cancelled && updateStatus('playing');
     video.addEventListener('playing', onPlaying);
 
     // Pre-flight: poll the manifest URL until it returns 200 (not 503).
@@ -119,14 +126,14 @@ export default function VideoTile({
           if (!data.fatal) return;
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
             if (netRetries++ >= 5) {
-              setStatus('error');
+              updateStatus('error');
               hls.destroy();
               return;
             }
             setTimeout(() => !cancelled && hls.startLoad(), 1500);
           } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
             if (mediaRetries++ >= 2) {
-              setStatus('error');
+              updateStatus('error');
               hls.destroy();
               return;
             }
@@ -137,7 +144,7 @@ export default function VideoTile({
           }
         });
       } else {
-        setStatus('error');
+        updateStatus('error');
       }
     };
 
@@ -155,7 +162,7 @@ export default function VideoTile({
         preflightCount++;
         await new Promise((r) => setTimeout(r, 1500));
       }
-      if (!cancelled) setStatus('error');
+      if (!cancelled) updateStatus('error');
     })();
 
     return () => {
@@ -171,9 +178,9 @@ export default function VideoTile({
   }, [src]);
 
   return (
-    <div className="group relative h-full w-full overflow-hidden rounded-lg bg-black">
+    <div className={`group relative h-full w-full overflow-hidden rounded-lg bg-black${hidden ? " pointer-events-none opacity-0 absolute -z-10" : ""}`}>
       {/* Hover toolbar */}
-      {src && status === 'playing' && (onExpand || showSnapshot) && (
+      {src && !hidden && status === 'playing' && (onExpand || showSnapshot) && (
         <div className="absolute right-2 top-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           {showSnapshot && (
             <button
@@ -236,7 +243,7 @@ export default function VideoTile({
         </div>
       )}
 
-      {src && status !== 'playing' && (
+      {src && !hidden && status !== 'playing' && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-gray-300">
           {status === 'error' ? (
             <div className="flex flex-col items-center gap-1 text-red-400">

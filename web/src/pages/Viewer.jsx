@@ -140,21 +140,89 @@ export default function Viewer() {
   // Get the list of cameras assigned to this page
   const pageCameras = page?.config?.slots?.filter((s) => s.cameraId) || [];
 
-  // Camera cycle: auto-advance through cameras in spotlight
-  useEffect(() => {
-    if (!cycleMode || !spotlight || pageCameras.length <= 1) return;
-    const id = setInterval(() => {
-      setCyclePos((p) => {
-        const next = (p + 1) % pageCameras.length;
-        const cam = pageCameras[next];
-        if (cam) {
-          setSpotlight({ cameraId: cam.cameraId, name: cam.label || cam.name });
+  // Camera cycle with pre-buffering: we keep a hidden VideoTile loading the
+  // next camera. When the cycle timer fires, we only swap if the next camera
+  // is already playing. If not, we wait for it. The timer starts from when
+  // the *current* camera starts playing, not from when it was swapped.
+  const [nextReady, setNextReady] = useState(false);
+  const nextReadyRef = useRef(false);
+  const cycleTimerRef = useRef(null);
+  const swapRef = useRef(null);
+
+  const setNextReadyBoth = useCallback((v) => {
+    nextReadyRef.current = v;
+    setNextReady(v);
+  }, []);
+
+  const CYCLE_INTERVAL = 15000; // 15 seconds per camera
+
+  const advanceCycle = useCallback(() => {
+    if (!pageCameras.length) return;
+    setCyclePos((prev) => {
+      const nextIdx = (prev + 1) % pageCameras.length;
+      const cam = pageCameras[nextIdx];
+      if (cam) {
+        setSpotlight({ cameraId: cam.cameraId, name: cam.label || cam.name });
+      }
+      return nextIdx;
+    });
+    setNextReadyBoth(false);
+  }, [pageCameras, setNextReadyBoth]);
+
+  // Start cycle timer when current spotlight starts playing
+  const onSpotlightStatus = useCallback((s) => {
+    if (s === 'playing' && cycleMode) {
+      if (cycleTimerRef.current) clearTimeout(cycleTimerRef.current);
+      cycleTimerRef.current = setTimeout(() => {
+        if (nextReadyRef.current) {
+          advanceCycle();
+        } else {
+          swapRef.current = setInterval(() => {
+            if (nextReadyRef.current) {
+              clearInterval(swapRef.current);
+              swapRef.current = null;
+              advanceCycle();
+            }
+          }, 500);
         }
-        return next;
-      });
-    }, 10000); // 10 seconds per camera
-    return () => clearInterval(id);
-  }, [cycleMode, spotlight, pageCameras]);
+      }, CYCLE_INTERVAL);
+    }
+  }, [cycleMode, advanceCycle]);
+
+  // When nextReady becomes true and we have a pending swap check, trigger it
+  useEffect(() => {
+    if (nextReady && swapRef.current) {
+      clearInterval(swapRef.current);
+      swapRef.current = null;
+      advanceCycle();
+    }
+  }, [nextReady, advanceCycle]);
+
+  // Also clear nextReady when spotlight camera changes
+  useEffect(() => {
+    setNextReadyBoth(false);
+  }, [spotlight?.cameraId, setNextReadyBoth]);
+
+  // Cleanup timers when cycle mode or spotlight changes
+  useEffect(() => {
+    if (!cycleMode || !spotlight) {
+      if (cycleTimerRef.current) { clearTimeout(cycleTimerRef.current); cycleTimerRef.current = null; }
+      if (swapRef.current) { clearInterval(swapRef.current); swapRef.current = null; }
+      setNextReadyBoth(false);
+    }
+  }, [cycleMode, spotlight, setNextReadyBoth]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (cycleTimerRef.current) clearTimeout(cycleTimerRef.current);
+      if (swapRef.current) clearInterval(swapRef.current);
+    };
+  }, []);
+
+  // Compute next camera for pre-buffering
+  const nextCamIdx = pageCameras.length > 1 ? (cyclePos + 1) % pageCameras.length : -1;
+  const nextCam = nextCamIdx >= 0 ? pageCameras[nextCamIdx] : null;
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -500,7 +568,17 @@ export default function Viewer() {
               showSnapshot={showSnapshot}
               showTimestamp={showTimestamp}
               showStats={showStats}
+              onStatusChange={onSpotlightStatus}
             />
+            {/* Pre-buffer next camera in cycle (hidden) */}
+            {cycleMode && nextCam && (
+              <VideoTile
+                key={`prebuf-${nextCam.cameraId}-${spotlightQuality}`}
+                src={streamUrl(nextCam.cameraId, { res: spotlightRes, transcode: spotlightTx })}
+                hidden
+                onStatusChange={(s) => s === 'playing' && setNextReadyBoth(true)}
+              />
+            )}
           </div>
         </div>
       )}
