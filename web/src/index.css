@@ -37,3 +37,12 @@ body {
 .card {
   @apply rounded-xl border border-white/10 bg-white/[0.03] p-4;
 }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}

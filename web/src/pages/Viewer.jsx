@@ -3,7 +3,17 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import VideoTile from '../components/VideoTile.jsx';
 import LayoutGrid from '../components/LayoutGrid.jsx';
 import { getLayout } from '../layouts.js';
-import { Maximize, AlertTriangle, GripVertical, X, RotateCcw } from 'lucide-react';
+import {
+  Maximize,
+  AlertTriangle,
+  GripVertical,
+  X,
+  RotateCcw,
+  Camera,
+  Clock,
+  Repeat,
+  Pause,
+} from 'lucide-react';
 
 export default function Viewer() {
   const { slug } = useParams();
@@ -106,7 +116,6 @@ export default function Viewer() {
   };
 
   // Fullscreen "spotlight" of a single camera.
-  // Spotlight always defaults to HD transcoded for best quality at full size.
   const [spotlight, setSpotlight] = useState(null);
   const [spotlightQuality, setSpotlightQuality] = useState('hd_h264');
   const overlayRef = useRef(null);
@@ -120,21 +129,99 @@ export default function Viewer() {
     setSpotlightQuality('hd_h264');
   }, []);
 
+  // Viewer toggles: snapshot, timestamp, cycle mode
+  const [showSnapshot, setShowSnapshot] = useState(false);
+  const [showTimestamp, setShowTimestamp] = useState(false);
+  const [cycleMode, setCycleMode] = useState(false);
+  const [cyclePos, setCyclePos] = useState(0);
+
+  // Get the list of cameras assigned to this page
+  const pageCameras = page?.config?.slots?.filter((s) => s.cameraId) || [];
+
+  // Camera cycle: auto-advance through cameras in spotlight
+  useEffect(() => {
+    if (!cycleMode || !spotlight || pageCameras.length <= 1) return;
+    const id = setInterval(() => {
+      setCyclePos((p) => {
+        const next = (p + 1) % pageCameras.length;
+        const cam = pageCameras[next];
+        if (cam) {
+          setSpotlight({ cameraId: cam.cameraId, name: cam.label || cam.name });
+        }
+        return next;
+      });
+    }, 10000); // 10 seconds per camera
+    return () => clearInterval(id);
+  }, [cycleMode, spotlight, pageCameras]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    if (!page) return;
+    const onKey = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+      // Number keys 1-9: spotlight that camera
+      const num = parseInt(e.key, 10);
+      if (num >= 1 && num <= 9) {
+        const idx = num - 1;
+        const cam = pageCameras[idx];
+        if (cam) {
+          setCyclePos(idx);
+          setSpotlight({ cameraId: cam.cameraId, name: cam.label || cam.name });
+        }
+        return;
+      }
+
+      switch (e.key.toLowerCase()) {
+        case 'f':
+          if (spotlight) {
+            overlayRef.current?.requestFullscreen?.().catch(() => {});
+          } else {
+            enterFullscreen();
+          }
+          break;
+        case 'escape':
+          if (spotlight) closeSpotlight();
+          break;
+        case 'q':
+          if (spotlight) {
+            const qualities = ['sd', 'hd', 'hd_h264'];
+            const cur = qualities.indexOf(spotlightQuality);
+            setSpotlightQuality(qualities[(cur + 1) % qualities.length]);
+          }
+          break;
+        case 's':
+          setShowSnapshot((v) => !v);
+          break;
+        case 't':
+          setShowTimestamp((v) => !v);
+          break;
+        case 'c':
+          if (pageCameras.length > 1) {
+            setCycleMode((v) => !v);
+            if (!spotlight && pageCameras[0]) {
+              setCyclePos(0);
+              setSpotlight({
+                cameraId: pageCameras[0].cameraId,
+                name: pageCameras[0].label || pageCameras[0].name,
+              });
+            }
+          }
+          break;
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [page, spotlight, spotlightQuality, pageCameras, closeSpotlight, enterFullscreen]);
+
+  // Fullscreen change handler for spotlight
   useEffect(() => {
     if (!spotlight) return;
-    overlayRef.current?.requestFullscreen?.().catch(() => {});
     const onFsChange = () => {
       if (!document.fullscreenElement) setSpotlight(null);
     };
-    const onKey = (e) => {
-      if (e.key === 'Escape') setSpotlight(null);
-    };
     document.addEventListener('fullscreenchange', onFsChange);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('fullscreenchange', onFsChange);
-      document.removeEventListener('keydown', onKey);
-    };
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, [spotlight]);
 
   if (error) {
@@ -179,12 +266,18 @@ export default function Viewer() {
     )}/index.m3u8?${q.toString()}`;
   };
 
+  const openSpotlight = (cameraId, name) => {
+    const idx = pageCameras.findIndex((c) => c.cameraId === cameraId);
+    setCyclePos(idx >= 0 ? idx : 0);
+    setSpotlight({ cameraId, name });
+  };
+
   return (
     <div
       className="flex h-full w-full flex-col"
       style={{ background: light ? '#f3f4f6' : '#0b0f1a', color: light ? '#111827' : '#e5e7eb' }}
     >
-      {!hideChrome && (cfg.logoUrl || cfg.title || cfg.headerText) && (
+      {!hideChrome && (cfg.logoUrl || cfg.title || cfg.headerText || true) && (
         <header
           className="flex items-center gap-3 px-4 py-3"
           style={{ borderBottom: `2px solid ${cfg.accent || '#2563eb'}` }}
@@ -197,6 +290,45 @@ export default function Viewer() {
             )}
           </div>
           <div className="ml-auto flex items-center gap-1">
+            {/* Viewer toggles */}
+            <button
+              onClick={() => setShowSnapshot((v) => !v)}
+              className={`rounded-md p-2 transition-colors ${
+                showSnapshot ? 'bg-blue-600/30 text-blue-400' : 'hover:bg-white/10'
+              }`}
+              title="Snapshot mode (S)"
+            >
+              <Camera className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => setShowTimestamp((v) => !v)}
+              className={`rounded-md p-2 transition-colors ${
+                showTimestamp ? 'bg-blue-600/30 text-blue-400' : 'hover:bg-white/10'
+              }`}
+              title="Timestamp overlay (T)"
+            >
+              <Clock className="h-5 w-5" />
+            </button>
+            {pageCameras.length > 1 && (
+              <button
+                onClick={() => {
+                  setCycleMode((v) => !v);
+                  if (!spotlight && pageCameras[0]) {
+                    setCyclePos(0);
+                    setSpotlight({
+                      cameraId: pageCameras[0].cameraId,
+                      name: pageCameras[0].label || pageCameras[0].name,
+                    });
+                  }
+                }}
+                className={`rounded-md p-2 transition-colors ${
+                  cycleMode ? 'bg-blue-600/30 text-blue-400' : 'hover:bg-white/10'
+                }`}
+                title="Cycle cameras (C)"
+              >
+                {cycleMode ? <Pause className="h-5 w-5" /> : <Repeat className="h-5 w-5" />}
+              </button>
+            )}
             {allowRearrange && customized && (
               <button
                 onClick={resetOrder}
@@ -209,7 +341,7 @@ export default function Viewer() {
             <button
               onClick={enterFullscreen}
               className="rounded-md p-2 hover:bg-white/10"
-              title="Fullscreen"
+              title="Fullscreen (F)"
             >
               <Maximize className="h-5 w-5" />
             </button>
@@ -234,10 +366,12 @@ export default function Viewer() {
               >
                 <VideoTile
                   src={hasCam ? streamUrl(slot.cameraId) : null}
-                  label={slot?.name}
+                  label={slot?.label || slot?.name}
                   showLabel={cfg.showLabels !== false}
                   fit={cfg.fit || 'cover'}
-                  onExpand={hasCam ? () => setSpotlight({ cameraId: slot.cameraId, name: slot.name }) : undefined}
+                  showSnapshot={showSnapshot}
+                  showTimestamp={showTimestamp}
+                  onExpand={hasCam ? () => openSpotlight(slot.cameraId, slot.label || slot.name) : undefined}
                 />
                 {allowRearrange && hasCam && (
                   <div
@@ -258,8 +392,40 @@ export default function Viewer() {
       )}
 
       {spotlight && (
-        <div ref={overlayRef} className="fixed inset-0 z-50 flex flex-col bg-black">
-          <div className="absolute right-3 top-3 z-10">
+        <div
+          ref={overlayRef}
+          className="fixed inset-0 z-50 flex flex-col bg-black animate-[fadeIn_0.2s_ease-out]"
+        >
+          <div className="absolute right-3 top-3 z-10 flex items-center gap-1">
+            {pageCameras.length > 1 && (
+              <button
+                onClick={() => setCycleMode((v) => !v)}
+                className={`rounded-md p-2 text-white transition-colors ${
+                  cycleMode ? 'bg-blue-600/40' : 'bg-white/10 hover:bg-white/20'
+                }`}
+                title="Cycle cameras (C)"
+              >
+                {cycleMode ? <Pause className="h-5 w-5" /> : <Repeat className="h-5 w-5" />}
+              </button>
+            )}
+            <button
+              onClick={() => setShowSnapshot((v) => !v)}
+              className={`rounded-md p-2 text-white transition-colors ${
+                showSnapshot ? 'bg-blue-600/40' : 'bg-white/10 hover:bg-white/20'
+              }`}
+              title="Snapshot mode (S)"
+            >
+              <Camera className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => setShowTimestamp((v) => !v)}
+              className={`rounded-md p-2 text-white transition-colors ${
+                showTimestamp ? 'bg-blue-600/40' : 'bg-white/10 hover:bg-white/20'
+              }`}
+              title="Timestamp overlay (T)"
+            >
+              <Clock className="h-5 w-5" />
+            </button>
             <button
               onClick={closeSpotlight}
               className="rounded-md bg-white/10 p-2 text-white hover:bg-white/20"
@@ -271,6 +437,11 @@ export default function Viewer() {
           {spotlight.name && (
             <div className="absolute left-4 top-4 z-10 rounded bg-black/50 px-2 py-1 text-sm text-white">
               {spotlight.name}
+              {cycleMode && pageCameras.length > 1 && (
+                <span className="ml-2 text-blue-400">
+                  ({cyclePos + 1}/{pageCameras.length})
+                </span>
+              )}
             </div>
           )}
           <div className="absolute left-4 bottom-4 z-10 flex items-center gap-1">
@@ -302,6 +473,8 @@ export default function Viewer() {
               label={spotlight.name}
               showLabel={false}
               fit="contain"
+              showSnapshot={showSnapshot}
+              showTimestamp={showTimestamp}
             />
           </div>
         </div>

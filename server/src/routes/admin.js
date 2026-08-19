@@ -30,6 +30,7 @@ import {
   serveLocalSegment,
   serveTranscodeSegment,
 } from '../streamCore.js';
+import { listGroups, saveGroup, deleteGroup } from '../db.js';
 
 const router = express.Router();
 
@@ -339,6 +340,23 @@ router.get('/preview/:cameraId/local/:file', requireAdmin, (req, res) => {
 
 router.get('/preview/:cameraId/tx/:file', requireAdmin, (req, res) => {
   serveTranscodeSegment(req, res, req.params.cameraId);
+});
+
+// ---- camera groups ---------------------------------------------------------
+router.get('/groups', requireAdmin, (req, res) => {
+  res.json({ groups: listGroups() });
+});
+
+router.post('/groups', requireAdmin, (req, res) => {
+  const { id, name, cameraIds } = req.body;
+  if (!name || !Array.isArray(cameraIds)) return res.status(400).json({ error: 'name and cameraIds required' });
+  const g = saveGroup(id || nanoid(), name, cameraIds);
+  res.json({ group: g });
+});
+
+router.delete('/groups/:id', requireAdmin, (req, res) => {
+  deleteGroup(req.params.id);
+  res.json({ ok: true });
 });
 
 function defaultConfig() {

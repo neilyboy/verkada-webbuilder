@@ -61,3 +61,39 @@ export function deleteSetting(key) {
 }
 
 export default db;
+
+// ---- camera groups ----------------------------------------------------------
+db.exec(`
+  CREATE TABLE IF NOT EXISTS camera_groups (
+    id         TEXT PRIMARY KEY,
+    name       TEXT,
+    camera_ids TEXT,        -- JSON array of camera IDs
+    created_at INTEGER,
+    updated_at INTEGER
+  );
+`);
+
+export function listGroups() {
+  return db.prepare('SELECT * FROM camera_groups ORDER BY name').all();
+}
+
+export function getGroup(id) {
+  return db.prepare('SELECT * FROM camera_groups WHERE id = ?').get(id);
+}
+
+export function saveGroup(id, name, cameraIds) {
+  const now = Date.now();
+  const existing = getGroup(id);
+  if (existing) {
+    db.prepare('UPDATE camera_groups SET name = ?, camera_ids = ?, updated_at = ? WHERE id = ?')
+      .run(name, JSON.stringify(cameraIds), now, id);
+  } else {
+    db.prepare('INSERT INTO camera_groups (id, name, camera_ids, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+      .run(id, name, JSON.stringify(cameraIds), now, now);
+  }
+  return getGroup(id);
+}
+
+export function deleteGroup(id) {
+  db.prepare('DELETE FROM camera_groups WHERE id = ?').run(id);
+}

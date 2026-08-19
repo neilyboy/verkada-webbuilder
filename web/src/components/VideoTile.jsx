@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
-import { Video, VideoOff, Loader2, Maximize2 } from 'lucide-react';
+import { Video, VideoOff, Loader2, Maximize2, Camera, Clock } from 'lucide-react';
 
 // A single HLS video tile. Plays the provided .m3u8 src, with automatic error
 // recovery and a status overlay. `src` may be null (empty slot).
@@ -11,10 +11,51 @@ export default function VideoTile({
   muted = true,
   fit = 'cover',
   onExpand,
+  showSnapshot = false,
+  showTimestamp = false,
 }) {
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const [status, setStatus] = useState('idle'); // idle | loading | playing | error
+  const [clock, setClock] = useState('');
+  const [flash, setFlash] = useState(false);
+
+  // Live timestamp overlay
+  useEffect(() => {
+    if (!showTimestamp) {
+      setClock('');
+      return;
+    }
+    const tick = () => {
+      const now = new Date();
+      setClock(
+        now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+          ' ' +
+          now.toLocaleTimeString('en-US', { hour12: false })
+      );
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [showTimestamp]);
+
+  const takeSnapshot = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || video.readyState < 2) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const name = (label || 'camera').replace(/[^a-z0-9_-]/gi, '_');
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = `${name}_${ts}.png`;
+    a.click();
+    setFlash(true);
+    setTimeout(() => setFlash(false), 300);
+  }, [label]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -29,16 +70,12 @@ export default function VideoTile({
     video.addEventListener('playing', onPlaying);
 
     // Pre-flight: poll the manifest URL until it returns 200 (not 503).
-    // The server returns 503 while the transcode session is starting up.
-    // hls.js doesn't reliably recover from 503 manifest responses, so we
-    // handle the polling ourselves and only hand off once the stream is ready.
-    const MAX_PREFLIGHT = 20; // 20 x 1.5s = 30s max wait
+    const MAX_PREFLIGHT = 20;
     let preflightCount = 0;
 
     const startPlayback = () => {
       if (cancelled) return;
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Native HLS (Safari / iOS).
         video.src = src;
         video.play().catch(() => {});
       } else if (Hls.isSupported()) {
@@ -86,7 +123,6 @@ export default function VideoTile({
         try {
           const r = await fetch(src, { method: 'GET' });
           if (r.status === 200) {
-            // Manifest is ready — start hls.js
             startPlayback();
             return;
           }
@@ -96,7 +132,6 @@ export default function VideoTile({
         preflightCount++;
         await new Promise((r) => setTimeout(r, 1500));
       }
-      // Timed out waiting for transcode
       if (!cancelled) setStatus('error');
     })();
 
@@ -114,18 +149,48 @@ export default function VideoTile({
 
   return (
     <div className="group relative h-full w-full overflow-hidden rounded-lg bg-black">
-      {src && onExpand && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onExpand();
-          }}
-          className="absolute right-2 top-2 z-10 rounded-md bg-black/50 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
-          title="Fullscreen this camera"
-        >
-          <Maximize2 className="h-4 w-4" />
-        </button>
+      {/* Hover toolbar */}
+      {src && status === 'playing' && (onExpand || showSnapshot) && (
+        <div className="absolute right-2 top-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          {showSnapshot && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                takeSnapshot();
+              }}
+              className="rounded-md bg-black/50 p-1.5 text-white hover:bg-black/70"
+              title="Snapshot"
+            >
+              <Camera className="h-4 w-4" />
+            </button>
+          )}
+          {onExpand && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onExpand();
+              }}
+              className="rounded-md bg-black/50 p-1.5 text-white hover:bg-black/70"
+              title="Fullscreen this camera"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       )}
+
+      {/* Timestamp overlay */}
+      {src && showTimestamp && clock && (
+        <div className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-black/50 px-2 py-0.5 font-mono text-xs text-white">
+          {clock}
+        </div>
+      )}
+
+      {/* Snapshot flash effect */}
+      {flash && (
+        <div className="pointer-events-none absolute inset-0 z-20 bg-white animate-pulse" />
+      )}
+
       {src ? (
         <video
           ref={videoRef}

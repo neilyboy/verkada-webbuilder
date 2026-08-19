@@ -14,6 +14,9 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  Plus,
+  Trash2,
+  Users,
 } from 'lucide-react';
 
 export default function PageBuilder() {
@@ -29,6 +32,9 @@ export default function PageBuilder() {
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
+  const [groups, setGroups] = useState([]);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [showGroupModal, setShowGroupModal] = useState(false);
 
   useEffect(() => {
     api.get(`/api/admin/pages/${id}`).then(({ page }) => {
@@ -40,6 +46,7 @@ export default function PageBuilder() {
       setCfg({ slots: [], ...page.config });
     });
     api.get('/api/admin/cameras').then((d) => setCameras(d.cameras));
+    api.get('/api/admin/groups').then((d) => setGroups(d.groups || []));
   }, [id]);
 
   const layout = useMemo(() => (cfg ? getLayout(cfg.layout) : null), [cfg]);
@@ -67,6 +74,35 @@ export default function PageBuilder() {
     (camId) => cameras.find((c) => c.camera_id === camId)?.name || '',
     [cameras]
   );
+
+  const saveGroupFromSlots = async () => {
+    const assigned = cfg.slots.filter((s) => s.cameraId).map((s) => s.cameraId);
+    if (!assigned.length || !newGroupName.trim()) return;
+    const { group } = await api.post('/api/admin/groups', {
+      name: newGroupName.trim(),
+      cameraIds: assigned,
+    });
+    setGroups((g) => [...g.filter((x) => x.id !== group.id), group].sort((a, b) => a.name.localeCompare(b.name)));
+    setNewGroupName('');
+  };
+
+  const applyGroup = (g) => {
+    const ids = JSON.parse(g.camera_ids || '[]');
+    const slots = [...cfg.slots];
+    for (let i = 0; i < slots.length; i++) {
+      if (i < ids.length) {
+        slots[i] = { ...slots[i], cameraId: ids[i], label: slots[i]?.label || '' };
+      } else {
+        slots[i] = { ...slots[i], cameraId: '' };
+      }
+    }
+    setCfg((c) => ({ ...c, slots }));
+  };
+
+  const deleteGroup = async (gid) => {
+    await api.del(`/api/admin/groups/${gid}`);
+    setGroups((g) => g.filter((x) => x.id !== gid));
+  };
 
   const save = async () => {
     setSaving(true);
@@ -253,6 +289,56 @@ export default function PageBuilder() {
                 <label className="label">Accent</label>
                 <input type="color" className="h-9 w-12 rounded bg-transparent" value={cfg.accent || '#2563eb'} onChange={(e) => update({ accent: e.target.value })} />
               </div>
+            </div>
+          </Section>
+
+          <Section title="Camera Groups">
+            <p className="mb-2 text-xs text-gray-500">
+              Save the current camera set as a named group, or apply a saved group to quickly fill all slots.
+            </p>
+            {groups.length > 0 && (
+              <div className="mb-2 space-y-1">
+                {groups.map((g) => {
+                  const ids = JSON.parse(g.camera_ids || '[]');
+                  return (
+                    <div key={g.id} className="flex items-center gap-1 rounded-lg border border-white/10 p-2">
+                      <button
+                        onClick={() => applyGroup(g)}
+                        className="flex flex-1 items-center gap-2 text-left text-xs hover:text-blue-400"
+                        title={`Apply ${ids.length} cameras to this page`}
+                      >
+                        <Users className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{g.name}</span>
+                        <span className="text-gray-500">({ids.length})</span>
+                      </button>
+                      <button
+                        onClick={() => deleteGroup(g.id)}
+                        className="shrink-0 rounded p-1 text-gray-500 hover:text-red-400"
+                        title="Delete group"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex gap-1">
+              <input
+                className="input flex-1"
+                placeholder="Group name…"
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && saveGroupFromSlots()}
+              />
+              <button
+                className="btn-ghost shrink-0"
+                onClick={saveGroupFromSlots}
+                disabled={!newGroupName.trim() || !cfg.slots.some((s) => s.cameraId)}
+                title="Save current cameras as a group"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
             </div>
           </Section>
 
