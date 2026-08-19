@@ -509,12 +509,13 @@ export default function Viewer() {
           ref={overlayRef}
           className="fixed inset-0 z-50 flex flex-col bg-black animate-[fadeIn_0.2s_ease-out]"
         >
-          <div className="absolute right-3 top-3 z-10 flex items-center gap-1">
+          {/* Toggle buttons (top-right, grouped) */}
+          <div className="absolute right-14 top-3 z-10 flex items-center gap-1 rounded-lg bg-black/40 p-1 backdrop-blur-sm">
             {pageCameras.length > 1 && (
               <button
                 onClick={() => setCycleMode((v) => !v)}
                 className={`rounded-md p-2 text-white transition-colors ${
-                  cycleMode ? 'bg-blue-600/40' : 'bg-white/10 hover:bg-white/20'
+                  cycleMode ? 'bg-blue-600/60' : 'hover:bg-white/15'
                 }`}
                 title="Cycle cameras (C)"
               >
@@ -524,7 +525,7 @@ export default function Viewer() {
             <button
               onClick={() => setShowSnapshot((v) => !v)}
               className={`rounded-md p-2 text-white transition-colors ${
-                showSnapshot ? 'bg-blue-600/40' : 'bg-white/10 hover:bg-white/20'
+                showSnapshot ? 'bg-blue-600/60' : 'hover:bg-white/15'
               }`}
               title="Snapshot mode (S)"
             >
@@ -533,7 +534,7 @@ export default function Viewer() {
             <button
               onClick={() => setShowTimestamp((v) => !v)}
               className={`rounded-md p-2 text-white transition-colors ${
-                showTimestamp ? 'bg-blue-600/40' : 'bg-white/10 hover:bg-white/20'
+                showTimestamp ? 'bg-blue-600/60' : 'hover:bg-white/15'
               }`}
               title="Timestamp overlay (T)"
             >
@@ -542,20 +543,21 @@ export default function Viewer() {
             <button
               onClick={() => setShowStats((v) => !v)}
               className={`rounded-md p-2 text-white transition-colors ${
-                showStats ? 'bg-blue-600/40' : 'bg-white/10 hover:bg-white/20'
+                showStats ? 'bg-blue-600/60' : 'hover:bg-white/15'
               }`}
               title="Stream stats (D)"
             >
               <Activity className="h-5 w-5" />
             </button>
-            <button
-              onClick={closeSpotlight}
-              className="rounded-md bg-white/10 p-2 text-white hover:bg-white/20"
-              title="Close (Esc)"
-            >
-              <X className="h-5 w-5" />
-            </button>
           </div>
+          {/* Close button (top-right, standalone) */}
+          <button
+            onClick={closeSpotlight}
+            className="absolute right-3 top-3 z-10 rounded-md bg-white/10 p-2 text-white hover:bg-white/20"
+            title="Close (Esc)"
+          >
+            <X className="h-5 w-5" />
+          </button>
           {spotlight.name && (
             <div className="absolute left-4 top-4 z-10 rounded bg-black/50 px-2 py-1 text-sm text-white">
               {spotlight.name}

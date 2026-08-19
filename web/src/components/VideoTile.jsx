@@ -262,18 +262,19 @@ export default function VideoTile({
         </div>
       )}
 
-      {/* Snapshot button (bottom-left, appears when snapshot mode is on) */}
+      {/* Snapshot button (bottom-left, always visible when snapshot mode is on) */}
       {src && !hidden && status === 'playing' && showSnapshot && (
-        <div className="absolute left-2 bottom-8 z-10 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="absolute left-2 bottom-8 z-10">
           <button
             onClick={(e) => {
               e.stopPropagation();
               takeSnapshot();
             }}
-            className="rounded-md bg-black/50 p-1.5 text-white hover:bg-black/70"
+            className="flex items-center gap-1.5 rounded-lg bg-blue-600/80 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition-colors hover:bg-blue-600"
             title="Take snapshot"
           >
             <Camera className="h-4 w-4" />
+            Capture
           </button>
         </div>
       )}
